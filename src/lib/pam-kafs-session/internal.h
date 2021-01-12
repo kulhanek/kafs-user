@@ -45,7 +45,7 @@ typedef struct pma_kafs_handle kafs_handle_t;
 void putil_err(pam_handle_t* pamh,const char* p_fmt,...)
                 __attribute__((__format__(printf, 2, 3)));
 
-void putil_notice(pam_handle_t* pamh,const char* p_fmt,...)
+void putil_debug(pam_handle_t* pamh,const char* p_fmt,...)
                 __attribute__((__format__(printf, 2, 3)));
 
 void putil_err_krb5(pam_handle_t* pamh,krb5_context ctx,int kerr,const char* p_fmt,...)

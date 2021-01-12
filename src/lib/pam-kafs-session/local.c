@@ -31,7 +31,7 @@
 
 int _pamafs_min_uid     = 1000;
 int _pamafs_shared_pag  = 1;
-int _pamefs_verbosity   = 2;
+int _pamefs_verbosity   = 0;
 
 /* ============================================================================= */
 
@@ -76,7 +76,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
 int __ignore_user(kafs_handle_t* kafs)
 {
     if ((kafs->uid == 0) || (kafs->uid < _pamafs_min_uid)) {
-        putil_notice(kafs->pamh, "ignoring low-UID user (%u < %d)",kafs->uid, _pamafs_min_uid);
+        putil_debug(kafs->pamh, "ignoring low-UID user (%u < %d)",kafs->uid, _pamafs_min_uid);
         return(1);
     }
     return(0);
@@ -86,7 +86,7 @@ int __ignore_user(kafs_handle_t* kafs)
 
 int __enter_user(kafs_handle_t* kafs)
 {
-    putil_notice(kafs->pamh, ">>> __enter_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
+    putil_debug(kafs->pamh, ">>> __enter_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
                  getuid(),geteuid(),getgid(),kafs->uid,kafs->gid);
 
     /* switch to the real and effective UID and GID so that the keyring ends up owned by the right user */
@@ -103,7 +103,7 @@ int __enter_user(kafs_handle_t* kafs)
         return(2);
     }
 
-    putil_notice(kafs->pamh, "<<< __enter_user: uid:%u euid:%u gid:%u",
+    putil_debug(kafs->pamh, "<<< __enter_user: uid:%u euid:%u gid:%u",
                  getuid(),geteuid(),getgid());
 
     return(0);
@@ -113,7 +113,7 @@ int __enter_user(kafs_handle_t* kafs)
 
 int __leave_user(kafs_handle_t* kafs)
 {
-    putil_notice(kafs->pamh, ">>> __leave_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
+    putil_debug(kafs->pamh, ">>> __leave_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
                  getuid(),geteuid(),getgid(),kafs->old_uid,kafs->old_gid);
     int err = 0;
     /* return to the original UID and GID (probably root) */
@@ -127,7 +127,7 @@ int __leave_user(kafs_handle_t* kafs)
         putil_err(kafs->pamh, "__leave_user: unable to change GID back to %d\n", kafs->old_gid);
         err = 2;
     }
-    putil_notice(kafs->pamh, "<<< __leave_user: uid:%u euid:%u gid:%u",
+    putil_debug(kafs->pamh, "<<< __leave_user: uid:%u euid:%u gid:%u",
                  getuid(),geteuid(),getgid());
     return(err);
 }
@@ -169,10 +169,10 @@ void putil_err_krb5(pam_handle_t* pamh,krb5_context ctx,int kerr,const char* p_f
 
 /* ============================================================================= */
 
-void putil_notice(pam_handle_t* pamh,const char* p_fmt,...)
+void putil_debug(pam_handle_t* pamh,const char* p_fmt,...)
 {
     if( _pamefs_verbosity < 1 ) return;
-    /* for verbocity one  and above */
+    /* for verbosity one  and above */
     va_list vl;
     va_start(vl,p_fmt);
     pam_vsyslog(pamh,LOG_ERR,p_fmt,vl);

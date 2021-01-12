@@ -7,8 +7,10 @@ This package provides user space commands for setup and use of kAFS (kernel AFS)
 $ sudo apt-get install heimdal-multidev libpam0g-dev libkeyutils-dev
 ```
 
-2) Download the source code and update CMakeList.txt if necessary. Then, compile and install the code.
+2) Download the source code. Update CMakeList.txt if necessary, then compile and install the code.
 ```bash
+$ git clone https://github.com/kulhanek/kafs-user.git
+$ cd kafs-user
 $ cmake .
 $ make
 $ sudo make install

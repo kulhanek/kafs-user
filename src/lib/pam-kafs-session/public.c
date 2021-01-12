@@ -37,11 +37,11 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     int             already_afslog;
     kafs_handle_t*  kafs = NULL;
 
-    putil_notice(pamh, ">>> pam_sm_open_session flags: %x",flags);
+    putil_debug(pamh, ">>> pam_sm_open_session flags: %x",flags);
 
     /* Do nothing unless AFS is available. */
     if( ! k_hasafs() ) {
-        putil_notice(pamh, "skipping, AFS apparently not available");
+        putil_debug(pamh, "skipping, AFS apparently not available");
         pamret = PAM_IGNORE;
         goto done;
     }
@@ -77,7 +77,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
 
-            putil_notice(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
             /* now switch effective user so shared PAG magic will work */
@@ -88,7 +88,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
                 err = 1;
             }
 
-            putil_notice(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
             if( err == 0 ) {
@@ -98,7 +98,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
                 }
             }
 
-            putil_notice(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
         } else {
@@ -136,7 +136,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
 
 done:
     __free_user(kafs);
-    putil_notice(pamh, "<<< pam_sm_open_session");
+    putil_debug(pamh, "<<< pam_sm_open_session");
     return pamret;
 }
 
@@ -172,7 +172,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
     int             already_afslog;
     kafs_handle_t*  kafs = NULL;
 
-    putil_notice(pamh, ">>> pam_sm_setcred flags: %x",flags);
+    putil_debug(pamh, ">>> pam_sm_setcred flags: %x",flags);
 
     /*
      * Do nothing unless AFS is available.  We need to return success here
@@ -186,7 +186,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 
     /* Do nothing unless AFS is available. */
     if( ! k_hasafs() ) {
-        putil_notice(pamh, "skipping, AFS apparently not available");
+        putil_debug(pamh, "skipping, AFS apparently not available");
         pamret = PAM_SUCCESS;
         goto done;
     }
@@ -271,7 +271,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
 
-            putil_notice(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
             /* now switch effective user so shared PAG magic will work */
@@ -282,7 +282,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
                 err = 1;
             }
 
-            putil_notice(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
             if( err == 0 ) {
@@ -292,7 +292,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
                 }
             }
 
-            putil_notice(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
+            putil_debug(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
                          getuid(),geteuid(),getgid());
 
         } else {
@@ -334,7 +334,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 
 done:
     __free_user(kafs);
-    putil_notice(pamh, "<<< pam_sm_setcred");
+    putil_debug(pamh, "<<< pam_sm_setcred");
     return pamret;
 }
 
@@ -352,11 +352,11 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
     int             already_afslog;
     kafs_handle_t*  kafs = NULL;
 
-    putil_notice(pamh, ">>> pam_sm_close_session flags: %x",flags);
+    putil_debug(pamh, ">>> pam_sm_close_session flags: %x",flags);
 
     /* Do nothing unless AFS is available. */
     if( ! k_hasafs() ) {
-        putil_notice(pamh, "skipping, AFS apparently not available");
+        putil_debug(pamh, "skipping, AFS apparently not available");
         pamret = PAM_IGNORE;
         goto done;
     }
@@ -418,7 +418,7 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
 
 done:
     __free_user(kafs);
-    putil_notice(pamh, "<<< pam_sm_close_session");
+    putil_debug(pamh, "<<< pam_sm_close_session");
     return pamret;
 }
 
