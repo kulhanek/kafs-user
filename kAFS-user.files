@@ -1,3 +1,4 @@
+README.md
 src/lib/pam-kafs-session/internal.h
 src/lib/pam-kafs-session/local.c
 etc/CMakeLists.txt

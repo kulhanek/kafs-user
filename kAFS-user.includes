@@ -3,3 +3,4 @@ src/bin/utils
 src/bin
 src/lib/pam-kafs-session
 etc
+.
