@@ -40,7 +40,6 @@ AFS tokens can be manipulated with the following commands:
 
 ## PAG ##
 The PAG (Process Authentication Goup) in the kAFS-user implementation is nothing else than a session keyring. Two types of PAGs are supported:
-
 * local PAG
 * shared PAG
 
@@ -51,4 +50,8 @@ is represented by one named session keyring unique for a user, which is then sha
 This is a PAM module, which provides auth and session management tasks. The configuration is hardcoded
 in the local.c file. By default, minium_uid is 1000 and support for shared PAGs is enabled. Defaults AFS cells
 are taken from the TheseCells and ThisCell file.
-
+In the current implementation, credential cache strict checking must be disabled in /etc/krb5.conf.
+```bash
+[libdefaults]
+        fcache_strict_checking = false
+```
