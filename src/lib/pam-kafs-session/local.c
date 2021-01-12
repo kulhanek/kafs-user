@@ -1,0 +1,218 @@
+/* Copyright (c) 2021 Petr Kulhanek (kulhanek@chemi.muni.cz)
+ * Support for kAFS (kernel AFS) adapted from Heimdal libkafs,
+ * kafs-client and pam-afs-session.
+ */
+/*
+ * Get or delete AFS tokens.
+ *
+ * Here are the functions to get or delete AFS tokens, called by the various
+ * public functions.
+ *
+ * Written by Russ Allbery <eagle@eyrie.org>
+ * Copyright 2006, 2007, 2008, 2010, 2011
+ *     The Board of Trustees of the Leland Stanford Junior University
+ *
+ * See LICENSE for licensing terms.
+ */
+
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <syslog.h>
+#include <security/pam_ext.h>
+
+#include "internal.h"
+#include <kafs-user.h>
+
+/* ============================================================================= */
+
+int _pamafs_min_uid     = 1000;
+int _pamafs_shared_pag  = 1;
+int _pamefs_verbosity   = 0;
+
+/* ============================================================================= */
+
+kafs_handle_t* __init_user(pam_handle_t *pamh)
+{
+    if (getuid() != geteuid() || getgid() != getegid()) {
+        putil_err(pamh, "kafs setup in a setuid context ignored");
+        return(NULL);
+    }
+
+    /* look up the target UID and GID */
+    const char* username;
+
+    int ret = pam_get_user(pamh, &username,NULL);
+    if( ret != PAM_SUCCESS ){
+        putil_err(pamh, "no username provided");
+        return(NULL);
+    }
+    struct passwd* pw = getpwnam(username);
+    if (!pw) {
+        putil_err(pamh, "unable to look up user: '%s'",username);
+        return(NULL);
+    }
+
+    kafs_handle_t* kafs = malloc(sizeof(kafs_handle_t));
+    if( kafs == NULL ){
+        putil_err(pamh, "unable to allocate kafs_handle_t");
+        return(NULL);
+    }
+
+    kafs->pamh      = pamh;
+    kafs->uid       = pw->pw_uid;
+    kafs->old_uid   = getuid();
+    kafs->gid       = pw->pw_gid;
+    kafs->old_gid   = getgid();
+
+    return(kafs);
+}
+
+/* ============================================================================= */
+
+int __ignore_user(kafs_handle_t* kafs)
+{
+    if ((kafs->uid == 0) || (kafs->uid < _pamafs_min_uid)) {
+        putil_notice(kafs->pamh, "ignoring low-UID user (%u < %d)",kafs->uid, _pamafs_min_uid);
+        return(1);
+    }
+    return(0);
+}
+
+/* ============================================================================= */
+
+int __enter_user(kafs_handle_t* kafs)
+{
+    putil_notice(kafs->pamh, ">>> __enter_user uid:%d/euid:%d -> uid:%d",kafs->old_uid,geteuid(),kafs->uid);
+
+    /* switch to the real and effective UID and GID so that the keyring ends up owned by the right user */
+    if( (kafs->gid != kafs->old_gid) && (setregid(kafs->gid,-1) < 0) ) {
+        putil_err(kafs->pamh, "__enter_user: unable to change GID to %u temporarily\n", kafs->gid);
+        return(1);
+    }
+
+    if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->uid,-1) < 0) ) {
+        putil_err(kafs->pamh, "__enter_user: unable to change UID to %u temporarily\n", kafs->uid);
+        if (setregid(kafs->old_gid,-1) < 0)
+            putil_err(kafs->pamh, "__enter_user: unable to change GID back to %u\n", kafs->old_gid);
+        return(2);
+    }
+
+    return(0);
+}
+
+/* ============================================================================= */
+
+int __leave_user(kafs_handle_t* kafs)
+{
+    putil_notice(kafs->pamh, "<<< __leave_user %d <- %d",kafs->old_uid,kafs->uid);
+    int err = 0;
+    /* return to the original UID and GID (probably root) */
+    if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid, -1) < 0) ) {
+        putil_err(kafs->pamh,"__leave_user: unable to change UID back to %d\n", kafs->old_uid);
+        putil_err(kafs->pamh,"errno: %s",strerror(errno));
+        err = 1;
+    }
+
+    if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid, -1) < 0) ) {
+        putil_err(kafs->pamh, "__leave_user: unable to change GID back to %d\n", kafs->old_gid);
+        err = 2;
+    }
+    return(err);
+}
+
+/* ============================================================================= */
+
+void __free_user(kafs_handle_t* kafs)
+{
+   if( kafs == NULL ) return;
+   free(kafs);
+}
+
+/* ============================================================================= */
+
+void putil_err(pam_handle_t* pamh,const char* p_fmt,...)
+{
+    /* for any verbocity */
+    va_list vl;
+    va_start(vl,p_fmt);
+    pam_vsyslog(pamh,LOG_ERR,p_fmt,vl);
+    va_end(vl);
+}
+
+/* ============================================================================= */
+
+void putil_err_krb5(pam_handle_t* pamh,krb5_context ctx,int kerr,const char* p_fmt,...)
+{
+    va_list vl;
+    va_start(vl,p_fmt);
+    pam_vsyslog(pamh,LOG_ERR,p_fmt,vl);
+    va_end(vl);
+
+    const char* p_errm = krb5_get_error_message(ctx,kerr);
+    if( p_errm ){
+        putil_err(pamh, "krb5: %s\n",p_errm);
+        krb5_free_error_message(ctx,p_errm);
+    }
+}
+
+/* ============================================================================= */
+
+void putil_notice(pam_handle_t* pamh,const char* p_fmt,...)
+{
+    if( _pamefs_verbosity < 1 ) return;
+    /* for verbocity one  and above */
+    va_list vl;
+    va_start(vl,p_fmt);
+    pam_vsyslog(pamh,LOG_ERR,p_fmt,vl);
+    va_end(vl);
+}
+
+/* ============================================================================= */
+
+int pamkafs_afslog(pam_handle_t *pamh)
+{    
+    /* Don't try to get a token unless we have a K5 ticket cache. */
+    const char* p_cc_name = pam_getenv(pamh, "KRB5CCNAME");
+    if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
+    if( p_cc_name == NULL ) {
+        putil_err(pamh,"no KRB5CCNAME");
+        return(1);
+    }
+
+    /* init krb5 context and ccache */
+    krb5_error_code kret;
+    krb5_context    ctx;
+    krb5_ccache     ccache;
+
+    kret = krb5_init_context(&ctx);
+    if( kret != 0 ){
+        putil_err(pamh,"unable to init krb5 context");
+        return(2);
+    }
+
+    kret = krb5_cc_resolve(ctx, p_cc_name, &ccache);
+    if( kret != 0 ) {
+        putil_err_krb5(pamh,ctx,kret,"unable to resolve ccache");
+        krb5_free_context(ctx);
+        return(3);
+    }
+
+    /* afslog */
+    kret = krb5_afslog(ctx, ccache, NULL, NULL);
+
+    /* clean up */
+    krb5_cc_close(ctx, ccache);
+    krb5_free_context(ctx);
+
+    if( kret != 0 ) {
+        putil_err(pamh,"krb5_afslog failed");
+        return(4);
+    }
+    return(0);
+}
+
+/* ============================================================================= */

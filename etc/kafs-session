@@ -1,0 +1,9 @@
+Name: kAFS session management
+Default: yes
+Priority: 64
+Auth-Type: Additional
+Auth:
+        optional			pam_kafs_session.so
+Session-Type: Additional
+Session:
+        optional			pam_kafs_session.so

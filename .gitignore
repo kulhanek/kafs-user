@@ -1,0 +1,8 @@
+*.mod
+*.cmake
+CMakeCache.txt
+CMakeFiles
+DartConfiguration.tcl
+Makefile
+/bin
+/lib
