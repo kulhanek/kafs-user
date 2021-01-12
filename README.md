@@ -16,7 +16,7 @@ $ sudo make install
 
 ## Setup AFS ##
 1) Configure CellServDB, TheseCells, and ThisCell files in the /etc/kafs-user/ directory. Their meaning and syntax
-is the same as for OpenAFS.
+is the same as for OpenAFS. Configuration using AFSDB DNS is not supported.
 
 2) Enable the afs.mount unit for its automatic start at boot.
 ```bash
