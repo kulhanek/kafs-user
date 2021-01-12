@@ -39,13 +39,13 @@ AFS tokens can be manipulated with the following commands:
 
 
 ## PAG ##
-The PAG (Process Authotrization Goup) in the kAFS-user implementation is nothing else than a session keyring. Two types of PAGs are supported:
+The PAG (Process Authentication Goup) in the kAFS-user implementation is nothing else than a session keyring. Two types of PAGs are supported:
 
 * local PAG
 * shared PAG
 
-The local PAG is a unique session keyring available for each login session. On contrary, the shared PAG
-is represented by one named session keyring, which is shared among multiple login sessions.
+The local PAG is a session keyring unique for each login session. On contrary, the shared PAG
+is represented by one named session keyring unique for a user, which is then shared among multiple login sessions.
 
 ## pam-kafs-session ##
 This is a PAM module, which provides auth and session management tasks. The configuration is hardcoded
