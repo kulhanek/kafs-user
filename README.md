@@ -60,5 +60,6 @@ In the current implementation, credential cache strict checking must be disabled
 * [Heimdal](https://github.com/heimdal/heimdal)
 * [kAFS](https://www.kernel.org/doc/html/latest/filesystems/afs.html)
 * [kafs-client](https://www.infradead.org/~dhowells/kafs/kafs_client.html)
+* [linux-pam](https://github.com/linux-pam/linux-pam)
 * [pam-afs-session](https://www.eyrie.org/~eagle/software/pam-afs-session/)
 
