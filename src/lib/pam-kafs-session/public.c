@@ -76,10 +76,22 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     /* create PAG if necessary */
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
-            if( k_setpag_shared() != 0 ){
-                putil_err(pamh, "unable to create shared PAG");
+
+            /* now switch effective user so shared PAG magic will work */
+            uid_t old_euid = geteuid();
+            if( seteuid(kafs->uid) != 0 ){
+                putil_err(kafs->pamh, "unable to seteuid %u->%u, which is required for shared PAG\n",
+                          old_euid,geteuid());
                 err = 1;
             }
+
+            if( err == 0 ) {
+                if( k_setpag_shared() != 0 ){
+                    putil_err(pamh, "unable to create shared PAG");
+                    err = 1;
+                }
+            }
+
         } else {
             if( k_setpag() != 0 ){
                 putil_err(pamh, "unable to create PAG");
@@ -246,23 +258,25 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 
     int err = 0;
     /* create PAG if necessary
-     * k_setpag_shared cannot be called if the PAG has been already created (normally it works, but not here :-(
-     * keyctl_join_session_keyring (in k_setpag_shared) returns the zero key and __leave_user fails :-(
-     * perhaps wrong permissions after the first keyctl_setperm?
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): >>> pam_sm_setcred
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): >>> __enter_user 0 -> 1001
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): unable to create PAG
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): <<< __leave_user 0 <- 1001
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): __leave_user: unable to change UID back to 0
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): errno: Operation not permitted
-     *  Jan 12 16:33:00 pes sshd[31860]: pam_kafs_session(sshd:setcred): <<< pam_sm_setcred
      */
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
-            if( k_setpag_shared() != 0 ){
-                putil_err(pamh, "unable to create shared PAG");
+
+            /* now switch effective user so shared PAG magic will work */
+            uid_t old_euid = geteuid();
+            if( seteuid(kafs->uid) != 0 ){
+                putil_err(kafs->pamh, "unable to seteuid %u->%u, which is required for shared PAG\n",
+                          old_euid,geteuid());
                 err = 1;
             }
+
+            if( err == 0 ) {
+                if( k_setpag_shared() != 0 ){
+                    putil_err(pamh, "unable to create shared PAG");
+                    err = 1;
+                }
+            }
+
         } else {
             if( k_setpag() != 0 ){
                 putil_err(pamh, "unable to create PAG");

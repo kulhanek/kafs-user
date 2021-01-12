@@ -31,7 +31,7 @@
 
 int _pamafs_min_uid     = 1000;
 int _pamafs_shared_pag  = 1;
-int _pamefs_verbosity   = 0;
+int _pamefs_verbosity   = 2;
 
 /* ============================================================================= */
 
@@ -86,7 +86,8 @@ int __ignore_user(kafs_handle_t* kafs)
 
 int __enter_user(kafs_handle_t* kafs)
 {
-    putil_notice(kafs->pamh, ">>> __enter_user uid:%d/euid:%d -> uid:%d",kafs->old_uid,geteuid(),kafs->uid);
+    putil_notice(kafs->pamh, ">>> __enter_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
+                 getuid(),geteuid(),getgid(),kafs->uid,kafs->gid);
 
     /* switch to the real and effective UID and GID so that the keyring ends up owned by the right user */
     if( (kafs->gid != kafs->old_gid) && (setregid(kafs->gid,-1) < 0) ) {
@@ -96,10 +97,14 @@ int __enter_user(kafs_handle_t* kafs)
 
     if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->uid,-1) < 0) ) {
         putil_err(kafs->pamh, "__enter_user: unable to change UID to %u temporarily\n", kafs->uid);
-        if (setregid(kafs->old_gid,-1) < 0)
+        if (setregid(kafs->old_gid,-1) < 0) {
             putil_err(kafs->pamh, "__enter_user: unable to change GID back to %u\n", kafs->old_gid);
+        }
         return(2);
     }
+
+    putil_notice(kafs->pamh, "<<< __enter_user: uid:%u euid:%u gid:%u",
+                 getuid(),geteuid(),getgid());
 
     return(0);
 }
@@ -108,7 +113,8 @@ int __enter_user(kafs_handle_t* kafs)
 
 int __leave_user(kafs_handle_t* kafs)
 {
-    putil_notice(kafs->pamh, "<<< __leave_user %d <- %d",kafs->old_uid,kafs->uid);
+    putil_notice(kafs->pamh, ">>> __leave_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
+                 getuid(),geteuid(),getgid(),kafs->old_uid,kafs->old_gid);
     int err = 0;
     /* return to the original UID and GID (probably root) */
     if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid, -1) < 0) ) {
@@ -121,6 +127,8 @@ int __leave_user(kafs_handle_t* kafs)
         putil_err(kafs->pamh, "__leave_user: unable to change GID back to %d\n", kafs->old_gid);
         err = 2;
     }
+    putil_notice(kafs->pamh, "<<< __leave_user: uid:%u euid:%u gid:%u",
+                 getuid(),geteuid(),getgid());
     return(err);
 }
 

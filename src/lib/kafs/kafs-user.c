@@ -95,8 +95,6 @@ int k_setpag(void)
 
 int k_setpag_shared(void)
 {
-    seteuid(1001);
-
     _kafs_dbg("-> k_setpag_shared\n");
     char buf[PATH_MAX];
 

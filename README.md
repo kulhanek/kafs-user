@@ -4,7 +4,7 @@ This package provides user space commands for setup and use of kAFS (kernel AFS)
 ## Installation ##
 1) At this moment, the package requires Heimdal version of krb5. First, install the necessary dependencies:
 ```bash
-$ sudo apt-get install heimdal-multidev libkeyutils-dev
+$ sudo apt-get install heimdal-multidev libpam0g-dev libkeyutils-dev
 ```
 
 2) Download the source code and update CMakeList.txt if necessary. Then, compile and install the code.
