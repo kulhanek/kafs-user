@@ -58,7 +58,7 @@ The configuration is possible using /etc/krb5.conf.
         minimum_uid = 1000
     }
 ```
-By default, minium_uid is 1000 and support for shared PAGs is enabled. Default AFS cells are taken from TheseCells and ThisCell files.
+By default, minium_uid is 1000 and support for shared PAGs is disabled. Default AFS cells are taken from TheseCells and ThisCell files.
 
 
 ## Related work ##
