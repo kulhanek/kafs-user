@@ -436,6 +436,7 @@ int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
         if( krb5_unparse_name(kafs->ctx, creds.server, &p_sname) != 0 ){
             putil_err_krb5(kafs,kret,"unable to get principal name");
         } else {
+            putil_notice(kafs, "> service principal '%s'",p_sname);
             if( fnmatch(kafs->conf_locpag_for_principal,p_sname,FNM_EXTMATCH) == 0 ){
                 putil_notice(kafs, "local PAG only for service principal '%s' as requested",p_sname);
                 kafs->conf_shared_pag = 0;
