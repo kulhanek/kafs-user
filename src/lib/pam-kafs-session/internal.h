@@ -35,6 +35,10 @@ struct pma_kafs_handle {
     pam_handle_t*   pamh;
     uid_t           old_uid,old_euid,uid;
     gid_t           old_gid,gid;
+
+    /* local config */
+    int conf_min_uid;
+    int conf_shared_pag;
 };
 
 typedef struct pma_kafs_handle kafs_handle_t;
@@ -67,12 +71,11 @@ int pamkafs_afslog(pam_handle_t *pamh);
 
 /* ============================================================================= */
 
-/* Hardcoded pam_kafs_session configurations */
-extern int _pamafs_min_uid;
-extern int _pamafs_shared_pag;
-extern int _pamefs_verbosity;
+/* global config */
+extern int conf_verbosity;
 
-#define PAMAFS_MODULE_NAME          "pam_kafs_session"
+/* module name for PAM and krb5.conf */
+#define PAMAFS_MODULE_NAME          "pam-kafs-session"
 
 /* ============================================================================= */
 

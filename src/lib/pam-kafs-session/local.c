@@ -29,9 +29,7 @@
 
 /* ============================================================================= */
 
-int _pamafs_min_uid     = 1000;
-int _pamafs_shared_pag  = 1;
-int _pamefs_verbosity   = 2;
+int conf_verbosity = 0;
 
 /* ============================================================================= */
 
@@ -69,6 +67,27 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->gid       = pw->pw_gid;
     kafs->old_gid   = getgid();
 
+    /* config - default value */
+    kafs->conf_min_uid    = 1000;
+    kafs->conf_shared_pag = 0;
+
+    /* read setup from krb5.conf */
+    krb5_error_code kret;
+    krb5_context    ctx;
+    char*           p_cs;
+
+    kret = krb5_init_context(&ctx);
+    if( kret == 0 ){
+        krb5_appdefault_boolean(ctx, PAMAFS_MODULE_NAME, NULL, "shared_pag", 0, &(kafs->conf_shared_pag));
+
+        krb5_appdefault_string(ctx, PAMAFS_MODULE_NAME, NULL, "minimum_uid", "1000", &p_cs);
+        kafs->conf_min_uid = atol(p_cs);
+
+        krb5_free_context(ctx);
+    } else {
+        putil_err(pamh,"unable to init krb5 context for reading configuration - using defaults");
+    }
+
     return(kafs);
 }
 
@@ -76,8 +95,8 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
 
 int __ignore_user(kafs_handle_t* kafs)
 {
-    if ((kafs->uid == 0) || (kafs->uid < _pamafs_min_uid)) {
-        putil_debug(kafs->pamh, "ignoring low-UID user (%u < %d)",kafs->uid, _pamafs_min_uid);
+    if ((kafs->uid == 0) || (kafs->uid < kafs->conf_min_uid)) {
+        putil_debug(kafs->pamh, "ignoring low-UID user (%u < %d)",kafs->uid, kafs->conf_min_uid);
         return(1);
     }
     return(0);
@@ -195,7 +214,7 @@ void putil_err_krb5(pam_handle_t* pamh,krb5_context ctx,int kerr,const char* p_f
 
 void putil_debug(pam_handle_t* pamh,const char* p_fmt,...)
 {
-    if( _pamefs_verbosity < 1 ) return;
+    if( conf_verbosity < 1 ) return;
     /* for verbosity one  and above */
     va_list vl;
     va_start(vl,p_fmt);

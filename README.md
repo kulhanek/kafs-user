@@ -49,9 +49,16 @@ The local PAG is a session keyring unique for each login session. On contrary, t
 is represented by one named session keyring unique for a user, which is then shared among multiple login sessions.
 
 ## pam-kafs-session ##
-This is a PAM module, which provides auth and session management tasks. The configuration is hardcoded
-in the local.c file. By default, minium_uid is 1000 and support for shared PAGs is enabled. Defaults AFS cells
-are taken from the TheseCells and ThisCell files.
+This is a PAM module, which provides auth and session management tasks. This module creates AFS tokens when logged to a system.
+The configuration is possible using /etc/krb5.conf.
+```bash
+[appdefaults]
+    pam-kafs-session = {
+        shared_pag  = true
+        minimum_uid = 1000
+    }
+```
+By default, minium_uid is 1000 and support for shared PAGs is enabled. Default AFS cells are taken from TheseCells and ThisCell files.
 
 
 ## Related work ##

@@ -75,7 +75,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     int err = 0;
     /* create PAG if necessary */
     if( k_haspag() == 0 ){
-        if( _pamafs_shared_pag == 1 ) {
+        if( kafs->conf_shared_pag == 1 ) {
             if( k_setpag_shared() != 0 ){
                 putil_err(pamh, "unable to create shared PAG");
                 err = 1;
@@ -195,7 +195,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
      * return PAM_SUCCESS here instead of PAM_IGNORE.
      */
     if (flags & PAM_DELETE_CRED) {
-        if( (already_afslog == 0) || (_pamafs_shared_pag == 1) ){
+        if( (already_afslog == 0) || (kafs->conf_shared_pag == 1) ){
             pamret = PAM_SUCCESS;   /* AFS tokens already destroyed or shared PAG */
             goto done;
         }
@@ -248,7 +248,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
     /* create PAG if necessary
      */
     if( k_haspag() == 0 ){
-        if( _pamafs_shared_pag == 1 ) {
+        if( kafs->conf_shared_pag == 1 ) {
             if( k_setpag_shared() != 0 ){
                 putil_err(pamh, "unable to create shared PAG");
                 err = 1;
@@ -339,7 +339,7 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
         already_afslog = 1;
     }
 
-    if( (already_afslog == 0) || (_pamafs_shared_pag == 1) ){
+    if( (already_afslog == 0) || (kafs->conf_shared_pag == 1) ){
         pamret = PAM_SUCCESS;   /* AFS tokens already destroyed or shared PAG */
         goto done;
     }
