@@ -48,8 +48,10 @@ The PAG (Process Authentication Goup) in the kAFS-user implementation is nothing
 The local PAG is a session keyring unique for each login session. On contrary, the shared PAG
 is represented by one named session keyring unique for a user, which is then shared among multiple login sessions.
 
+
 ## pam-kafs-session ##
-This is a PAM module, which creates AFS tokens when logged to a system for users with valid TGT ticket.
+This is a PAM module, which creates AFS tokens when logged to a system for users with valid TGT ticket
+(possibly comming from pam_krb5, or ssh with GSSAPIDelegateCredentials yes).
 Default AFS cells are taken from TheseCells and ThisCell files.
 
 The configuration options are as follows:
