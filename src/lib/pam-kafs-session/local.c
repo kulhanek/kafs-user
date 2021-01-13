@@ -31,7 +31,7 @@
 
 int _pamafs_min_uid     = 1000;
 int _pamafs_shared_pag  = 1;
-int _pamefs_verbosity   = 0;
+int _pamefs_verbosity   = 2;
 
 /* ============================================================================= */
 
@@ -65,6 +65,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->pamh      = pamh;
     kafs->uid       = pw->pw_uid;
     kafs->old_uid   = getuid();
+    kafs->old_euid  = geteuid();
     kafs->gid       = pw->pw_gid;
     kafs->old_gid   = getgid();
 
@@ -87,7 +88,7 @@ int __ignore_user(kafs_handle_t* kafs)
 int __enter_user(kafs_handle_t* kafs)
 {
     putil_debug(kafs->pamh, ">>> __enter_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
-                 getuid(),geteuid(),getgid(),kafs->uid,kafs->gid);
+                 getuid(),geteuid(),getgid(),kafs->uid,-1);
 
     /* switch to the real and effective UID and GID so that the keyring ends up owned by the right user */
     if( (kafs->gid != kafs->old_gid) && (setregid(kafs->gid,-1) < 0) ) {
@@ -103,6 +104,19 @@ int __enter_user(kafs_handle_t* kafs)
         return(2);
     }
 
+    /* we need also to change effective UID for shared PAG and krb5 */
+
+    if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->uid) < 0) ) {
+        putil_err(kafs->pamh, "__enter_user: unable to change EUID to %u temporarily\n", kafs->uid);
+        if (setreuid(kafs->old_uid,-1) < 0) {
+            putil_err(kafs->pamh, "__enter_user: unable to change UID back to %u\n", kafs->old_uid);
+        }
+        if (setregid(kafs->old_gid,-1) < 0) {
+            putil_err(kafs->pamh, "__enter_user: unable to change GID back to %u\n", kafs->old_gid);
+        }
+        return(3);
+    }
+
     putil_debug(kafs->pamh, "<<< __enter_user: uid:%u euid:%u gid:%u",
                  getuid(),geteuid(),getgid());
 
@@ -115,18 +129,28 @@ int __leave_user(kafs_handle_t* kafs)
 {
     putil_debug(kafs->pamh, ">>> __leave_user: uid:%u euid:%u gid:%u -> uid:%u gid:%u",
                  getuid(),geteuid(),getgid(),kafs->old_uid,kafs->old_gid);
+
+    /* return to the original UID, EUID and GID (probably root) */
+
     int err = 0;
-    /* return to the original UID and GID (probably root) */
-    if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid, -1) < 0) ) {
-        putil_err(kafs->pamh,"__leave_user: unable to change UID back to %d\n", kafs->old_uid);
+    if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->old_euid) < 0) ) {
+        putil_err(kafs->pamh,"__leave_user: unable to change EUID back to %d\n", kafs->old_euid);
         putil_err(kafs->pamh,"errno: %s",strerror(errno));
         err = 1;
     }
 
-    if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid, -1) < 0) ) {
-        putil_err(kafs->pamh, "__leave_user: unable to change GID back to %d\n", kafs->old_gid);
+    /* return to the original UID and GID (probably root) */
+    if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid, -1) < 0) ) {
+        putil_err(kafs->pamh,"__leave_user: unable to change UID back to %d\n", kafs->old_uid);
+        putil_err(kafs->pamh,"errno: %s",strerror(errno));
         err = 2;
     }
+
+    if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid, -1) < 0) ) {
+        putil_err(kafs->pamh, "__leave_user: unable to change GID back to %d\n", kafs->old_gid);
+        err = 3;
+    }
+
     putil_debug(kafs->pamh, "<<< __leave_user: uid:%u euid:%u gid:%u",
                  getuid(),geteuid(),getgid());
     return(err);

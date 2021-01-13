@@ -98,14 +98,6 @@ int k_setpag_shared(void)
     _kafs_dbg("-> k_setpag_shared\n");
     char buf[PATH_MAX];
 
-//    FILE* p_fi = fopen("/proc/keys","r");
-//    FILE* p_fo = fopen("/tmp/kafs-k","a");
-//    while(fgets(buf,sizeof(buf),p_fi)){
-//        fprintf(p_fo,"%s",buf);
-//    }
-//    fclose(p_fi);
-//    fclose(p_fo);
-
     snprintf(buf,PATH_MAX,_KAFS_SHARED_SES_NAME);
 
     /* join or create global user session keyring */
@@ -128,7 +120,6 @@ int k_setpag_shared(void)
         return(-1);
     }
 
-    seteuid(0);
     return(0);
 }
 

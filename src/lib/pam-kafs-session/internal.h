@@ -33,7 +33,7 @@
 
 struct pma_kafs_handle {
     pam_handle_t*   pamh;
-    uid_t           old_uid,uid;
+    uid_t           old_uid,old_euid,uid;
     gid_t           old_gid,gid;
 };
 

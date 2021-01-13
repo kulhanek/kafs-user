@@ -76,31 +76,10 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     /* create PAG if necessary */
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
-
-            putil_debug(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
-            /* now switch effective user so shared PAG magic will work */
-            uid_t old_euid = geteuid();
-            if( seteuid(kafs->uid) != 0 ){
-                putil_err(kafs->pamh, "unable to seteuid %u->%u, which is required for shared PAG\n",
-                          old_euid,geteuid());
+            if( k_setpag_shared() != 0 ){
+                putil_err(pamh, "unable to create shared PAG");
                 err = 1;
             }
-
-            putil_debug(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
-            if( err == 0 ) {
-                if( k_setpag_shared() != 0 ){
-                    putil_err(pamh, "unable to create shared PAG");
-                    err = 1;
-                }
-            }
-
-            putil_debug(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
         } else {
             if( k_setpag() != 0 ){
                 putil_err(pamh, "unable to create PAG");
@@ -270,31 +249,10 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
      */
     if( k_haspag() == 0 ){
         if( _pamafs_shared_pag == 1 ) {
-
-            putil_debug(kafs->pamh, "shared PAG 1: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
-            /* now switch effective user so shared PAG magic will work */
-            uid_t old_euid = geteuid();
-            if( seteuid(kafs->uid) != 0 ){
-                putil_err(kafs->pamh, "unable to seteuid %u->%u, which is required for shared PAG\n",
-                          old_euid,geteuid());
+            if( k_setpag_shared() != 0 ){
+                putil_err(pamh, "unable to create shared PAG");
                 err = 1;
             }
-
-            putil_debug(kafs->pamh, "shared PAG 2: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
-            if( err == 0 ) {
-                if( k_setpag_shared() != 0 ){
-                    putil_err(pamh, "unable to create shared PAG");
-                    err = 1;
-                }
-            }
-
-            putil_debug(kafs->pamh, "shared PAG 3: uid:%u euid:%u gid:%u",
-                         getuid(),geteuid(),getgid());
-
         } else {
             if( k_setpag() != 0 ){
                 putil_err(pamh, "unable to create PAG");

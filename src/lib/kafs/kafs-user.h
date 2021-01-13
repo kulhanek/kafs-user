@@ -41,12 +41,14 @@
 /* ============================================================================= */
 
 /* is kAFS loaded?
- * 0 - not present
- * 1 - present
+ * return values:
+ *  0 - not present
+ *  1 - present
 */
 int k_hasafs(void);
 
 /* do we have PAG?
+ * return values:
  *  0 NO
  *  1 local PAG
  *  2 shared PAG
@@ -54,31 +56,36 @@ int k_hasafs(void);
 int k_haspag(void);
 
 /* set new anonymous PAG
+ * return values:
  *  0 OK
  * -1 error with details in errno
 */
 int k_setpag(void);
 
-/* set or join sahred user PAG
+/* set or join shared PAG
+ * return values:
  *  0 OK
  * -1 error with details in errno
 */
 int k_setpag_shared(void);
 
 /* destroy all AFS tokens
+ * return values:
  *  0 OK
  * -1 error with details in errno
 */
 int k_unlog(void);
 
 /* destroy AFS token for given cell
+ * return values:
  *  0 OK
  * -1 error with details in errno
 */
 int k_unlog_cell(char* cell);
 
 /* list tokens
- * return the number of AFS tokens
+ * return values:
+ *  the number of AFS tokens
 */
 int k_list_tokens(void);
 
