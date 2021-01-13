@@ -121,6 +121,8 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
 
     /* check PAM service name if configured */
     if( (kafs->conf_locpag_for_pam != NULL) && (kafs->conf_shared_pag == 1) ){
+        putil_debug(kafs,"> filter by PAM service: %s",kafs->conf_locpag_for_pam);
+
         const void* p_service;
         int ret = pam_get_item(kafs->pamh, PAM_SERVICE, &p_service);
         if( ret != PAM_SUCCESS ){
@@ -374,7 +376,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
     /* record success */
     if( (already_afslog == 0) && (err == 0 ) ){
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, (char *) "yes", NULL) != PAM_SUCCESS ){
-            putil_err(kafs, "cannot set success data");
+            putil_err(kafs, "cannot set success data - afslog");
             return(3);
         }
     }
@@ -387,6 +389,14 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
 
 int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
 {
+    const void*     dummy;
+
+    if( pam_get_data(kafs->pamh, PAMAFS_MODULE_NAME LOCPAG, &dummy) == PAM_SUCCESS ){
+        /* disable shared PAG due to matching principal */
+        kafs->conf_shared_pag = 0;
+        return(0);
+    }
+
     /* we need K5 ticket cache. */
     const char* p_cc_name = pam_getenv(kafs->pamh, "KRB5CCNAME");
     if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
@@ -394,6 +404,8 @@ int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
         putil_err(kafs,"no KRB5CCNAME");
         return(1);
     }
+
+    putil_debug(kafs,"> filter by principal: %s",kafs->conf_locpag_for_principal);
 
     /* init krb5 ccache */
     krb5_error_code kret;
@@ -404,7 +416,7 @@ int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
     kret = krb5_cc_resolve(kafs->ctx, p_cc_name, &ccache);
     if( kret != 0 ) {
         putil_err_krb5(kafs,kret,"unable to resolve ccache");
-        return(3);
+        return(2);
     }
 
     kret = krb5_cc_start_seq_get(kafs->ctx, ccache, &curs);
@@ -417,17 +429,17 @@ int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
-    int stop = 0;
+    int found = 0;
 
-    while( (krb5_cc_next_cred(kafs->ctx, ccache, &curs, &creds) == 0) && (stop == 0) ){
+    while( (krb5_cc_next_cred(kafs->ctx, ccache, &curs, &creds) == 0) && (found == 0) ){
         char* p_sname;
         if( krb5_unparse_name(kafs->ctx, creds.server, &p_sname) != 0 ){
             putil_err_krb5(kafs,kret,"unable to get principal name");
         } else {
-            if( fnmatch(kafs->conf_locpag_for_pam,p_sname,FNM_EXTMATCH) == 0 ){
+            if( fnmatch(kafs->conf_locpag_for_principal,p_sname,FNM_EXTMATCH) == 0 ){
                 putil_notice(kafs, "local PAG only for service principal '%s' as requested",p_sname);
                 kafs->conf_shared_pag = 0;
-                stop = 1;
+                found = 1;
             }
             krb5_free_unparsed_name(kafs->ctx,p_sname);
         }
@@ -438,6 +450,13 @@ int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
 
     krb5_cc_end_seq_get(kafs->ctx, ccache, &curs);
     krb5_cc_close(kafs->ctx, ccache);
+
+    if( found == 1 ){
+        if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME LOCPAG, (char *) "yes", NULL) != PAM_SUCCESS ){
+            putil_err(kafs, "cannot set success data - locpag");
+            return(4);
+        }
+    }
 
     return(0);
 }
