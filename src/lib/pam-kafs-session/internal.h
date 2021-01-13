@@ -33,12 +33,19 @@
 
 struct pma_kafs_handle {
     pam_handle_t*   pamh;
+    krb5_context    ctx;
+
     uid_t           old_uid,old_euid,uid;
     gid_t           old_gid,gid;
 
     /* local config */
-    int conf_min_uid;
-    int conf_shared_pag;
+    int     conf_verbosity;
+    int     conf_create_pag;
+    int     conf_create_tokens;
+    int     conf_minimum_uid;
+    int     conf_shared_pag;
+    char*   conf_locpag_for_pam;
+    char*   conf_locpag_for_principal;
 };
 
 typedef struct pma_kafs_handle kafs_handle_t;
@@ -46,14 +53,20 @@ typedef struct pma_kafs_handle kafs_handle_t;
 /* ============================================================================= */
 
 /* logging */
-void putil_err(pam_handle_t* pamh,const char* p_fmt,...)
+void putil_err(kafs_handle_t* kafs,const char* p_fmt,...)
                 __attribute__((__format__(printf, 2, 3)));
 
-void putil_debug(pam_handle_t* pamh,const char* p_fmt,...)
+void putil_errno(kafs_handle_t* kafs,const char* p_fmt,...)
                 __attribute__((__format__(printf, 2, 3)));
 
-void putil_err_krb5(pam_handle_t* pamh,krb5_context ctx,int kerr,const char* p_fmt,...)
-                __attribute__((__format__(printf, 4, 5)));
+void putil_notice(kafs_handle_t* kafs,const char* p_fmt,...)
+                __attribute__((__format__(printf, 2, 3)));
+
+void putil_debug(kafs_handle_t* kafs,const char* p_fmt,...)
+                __attribute__((__format__(printf, 2, 3)));
+
+void putil_err_krb5(kafs_handle_t* kafs,int kerr,const char* p_fmt,...)
+                __attribute__((__format__(printf, 3, 4)));
 
 /* ============================================================================= */
 
@@ -66,16 +79,24 @@ void __free_user(kafs_handle_t* kafs);
 
 /* ============================================================================= */
 
+/* create PAG and tokens */
+int pamkafs_create(kafs_handle_t* kafs, int redo);
+
+/* test service principal in ccache */
+int pamkafs_test_locpag_principal(kafs_handle_t* kafs);
+
 /* afslog */
-int pamkafs_afslog(pam_handle_t *pamh);
+int pamkafs_afslog(kafs_handle_t* kafs);
+
+/* destroy tokens */
+int pamkafs_destroy(kafs_handle_t* kafs);
 
 /* ============================================================================= */
 
-/* global config */
-extern int conf_verbosity;
-
 /* module name for PAM and krb5.conf */
 #define PAMAFS_MODULE_NAME          "pam-kafs-session"
+#define AFSLOG                      "-afslog"
+#define LOCPAG                      "-locpag"
 
 /* ============================================================================= */
 

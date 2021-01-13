@@ -32,24 +32,21 @@
 
 int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 {
-    const void*     dummy;
     int             pamret;
-    int             already_afslog;
-    kafs_handle_t*  kafs = NULL;
-
-    putil_debug(pamh, ">>> pam_sm_open_session flags: %x",flags);
-
-    /* Do nothing unless AFS is available. */
-    if( ! k_hasafs() ) {
-        putil_debug(pamh, "skipping, AFS apparently not available");
-        pamret = PAM_IGNORE;
-        goto done;
-    }
+    kafs_handle_t*  kafs;
 
     /* init user */
     kafs = __init_user(pamh);
     if( kafs == NULL ) {
-        putil_err(pamh, "no suitable user");
+        pamret = PAM_IGNORE;
+        goto done;
+    }
+
+    putil_debug(kafs, ">>> pam_sm_open_session flags: %x",flags);
+
+    /* Do nothing unless AFS is available. */
+    if( ! k_hasafs() ) {
+        putil_debug(kafs, "skipping, AFS apparently not available");
         pamret = PAM_IGNORE;
         goto done;
     }
@@ -60,62 +57,15 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
         goto done;
     }
 
-    /* was afslog already called? */
-    already_afslog = 0;
-    if( pam_get_data(pamh, PAMAFS_MODULE_NAME, &dummy) == PAM_SUCCESS ){
-        already_afslog = 1;
-    }
-
-    /* become target user for subsequent operations */
-    if( __enter_user(kafs) > 0 ){
-        pamret = PAM_SESSION_ERR;
-        goto done;
-    }
-
-    int err = 0;
-    /* create PAG if necessary */
-    if( k_haspag() == 0 ){
-        if( kafs->conf_shared_pag == 1 ) {
-            if( k_setpag_shared() != 0 ){
-                putil_err(pamh, "unable to create shared PAG");
-                err = 1;
-            }
-        } else {
-            if( k_setpag() != 0 ){
-                putil_err(pamh, "unable to create PAG");
-                err = 1;
-            }
-        }
-        if( err == 0 ) already_afslog = 0; /* PAG created - we need to afslog */
-    }
-    /* afslog */
-    if( ( already_afslog == 0 ) && (err == 0) ) {
-        if( pamkafs_afslog(pamh) != 0 ) {
-            putil_err(pamh, "unable to afslog");
-            err = 2;
-        }
-    }
-
-    /* restore service user */
-    if( __leave_user(kafs) ){
-        pamret = PAM_SESSION_ERR;
-        goto done;
-    }
-
-    /* record success */
-    if( (already_afslog == 0) && (err == 0 ) ){
-        if( pam_set_data(pamh, PAMAFS_MODULE_NAME, (char *) "yes", NULL) != PAM_SUCCESS ){
-            putil_err(pamh, "cannot set success data");
-            pamret = PAM_SESSION_ERR;
-            goto done;
-        }
-    }
-
+    /* create tokens */
     pamret = PAM_SUCCESS;
+    if( pamkafs_create(kafs, 0) != 0 ){
+        pamret = PAM_SESSION_ERR;
+    }
 
 done:
+    putil_debug(kafs, "<<< pam_sm_open_session");
     __free_user(kafs);
-    putil_debug(pamh, "<<< pam_sm_open_session");
     return pamret;
 }
 
@@ -146,12 +96,17 @@ int pam_sm_authenticate(pam_handle_t *pamh UNUSED, int flags UNUSED,
  */
 int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 {
-    const void*     dummy;
     int             pamret;
-    int             already_afslog;
-    kafs_handle_t*  kafs = NULL;
+    kafs_handle_t*  kafs;
 
-    putil_debug(pamh, ">>> pam_sm_setcred flags: %x",flags);
+    /* init user */
+    kafs = __init_user(pamh);
+    if( kafs == NULL ) {
+        pamret = PAM_IGNORE;
+        goto done;
+    }
+
+    putil_debug(kafs, ">>> pam_sm_setcred flags: %x",flags);
 
     /*
      * Do nothing unless AFS is available.  We need to return success here
@@ -165,15 +120,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 
     /* Do nothing unless AFS is available. */
     if( ! k_hasafs() ) {
-        putil_debug(pamh, "skipping, AFS apparently not available");
-        pamret = PAM_SUCCESS;
-        goto done;
-    }
-
-    /* init user */
-    kafs = __init_user(pamh);
-    if( kafs == NULL ) {
-        putil_err(pamh, "no suitable user");
+        putil_debug(kafs, "skipping, AFS apparently not available");
         pamret = PAM_SUCCESS;
         goto done;
     }
@@ -184,50 +131,16 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
         goto done;
     }
 
-    /* was afslog already called? */
-    already_afslog = 0;
-    if( pam_get_data(pamh, PAMAFS_MODULE_NAME, &dummy) == PAM_SUCCESS ){
-        already_afslog = 1;
-    }
-
     /*
      * If DELETE_CRED was specified, delete the tokens (if any).  Similarly
      * return PAM_SUCCESS here instead of PAM_IGNORE.
      */
     if (flags & PAM_DELETE_CRED) {
-        if( (already_afslog == 0) || (kafs->conf_shared_pag == 1) ){
-            pamret = PAM_SUCCESS;   /* AFS tokens already destroyed or shared PAG */
-            goto done;
-        }
-
-        /* become target user for subsequent operations */
-        if( __enter_user(kafs) > 0 ){
-            pamret = PAM_CRED_ERR;
-            goto done;
-        }
-
-        /* destroy all AFS tokens */
-        int err = k_unlog();
-        if( err != 0 ){
-            putil_err(pamh, "unable to unlog");
-        }
-
-        /* restore service user */
-        if( __leave_user(kafs) ){
-            pamret = PAM_CRED_ERR;
-            goto done;
-        }
-
-        /* remove module data */
-        if( err == 0 ){
-            if( pam_set_data(pamh, PAMAFS_MODULE_NAME, NULL, NULL) != PAM_SUCCESS ){
-                putil_err(pamh, "unable to remove module data");
-                pamret = PAM_CRED_ERR;
-                goto done;
-            }
-        }
-
+        /* unlog tokens */
         pamret = PAM_SUCCESS;
+        if( pamkafs_destroy(kafs) != 0 ){
+            pamret = PAM_CRED_ERR;
+        }
         goto done;
     }
 
@@ -238,61 +151,15 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
      * and should use the existing PAG, so don't create a new PAG.
      */
 
-    /* become target user for subsequent operations */
-    if( __enter_user(kafs) > 0 ){
-        pamret = PAM_CRED_ERR;
-        goto done;
-    }
-
-    int err = 0;
-    /* create PAG if necessary
-     */
-    if( k_haspag() == 0 ){
-        if( kafs->conf_shared_pag == 1 ) {
-            if( k_setpag_shared() != 0 ){
-                putil_err(pamh, "unable to create shared PAG");
-                err = 1;
-            }
-        } else {
-            if( k_setpag() != 0 ){
-                putil_err(pamh, "unable to create PAG");
-                err = 1;
-            }
-        }
-        if( err == 0 ) already_afslog = 0; /* PAG created - we need to afslog */
-    }
-
-    if( flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED) ){
-        already_afslog = 0; /* recreate as requested */
-    }
-
-    /* afslog */
-    if( ( already_afslog == 0 ) && (err == 0) ) {
-        if( pamkafs_afslog(pamh) != 0 ) {
-            putil_err(pamh, "unable to afslog");
-            err = 2;
-        }
-    }
-
-    /* restore service user */
-    if( __leave_user(kafs) ){
-        pamret = PAM_CRED_ERR;
-        goto done;
-    }
-
-    /* record success */
-    if( (already_afslog == 0) && (err == 0 ) ){
-        if( pam_set_data(pamh, PAMAFS_MODULE_NAME, (char *) "yes", NULL) != PAM_SUCCESS ){
-            putil_err(pamh, "cannot set success data");
-            pamret = PAM_CRED_ERR;
-            goto done;
-        }
-    }
+    /* create tokens */
     pamret = PAM_SUCCESS;
+    if( pamkafs_create(kafs, flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED) ) != 0 ){
+        pamret = PAM_CRED_ERR;
+    }
 
 done:
+    putil_debug(kafs, "<<< pam_sm_setcred");
     __free_user(kafs);
-    putil_debug(pamh, "<<< pam_sm_setcred");
     return pamret;
 }
 
@@ -305,24 +172,21 @@ done:
 
 int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 {
-    const void*     dummy;
+    kafs_handle_t*  kafs;
     int             pamret;
-    int             already_afslog;
-    kafs_handle_t*  kafs = NULL;
-
-    putil_debug(pamh, ">>> pam_sm_close_session flags: %x",flags);
-
-    /* Do nothing unless AFS is available. */
-    if( ! k_hasafs() ) {
-        putil_debug(pamh, "skipping, AFS apparently not available");
-        pamret = PAM_IGNORE;
-        goto done;
-    }
 
     /* init user */
     kafs = __init_user(pamh);
     if( kafs == NULL ) {
-        putil_err(pamh, "no suitable user");
+        pamret = PAM_IGNORE;
+        goto done;
+    }
+
+    putil_debug(kafs, ">>> pam_sm_close_session flags: %x",flags);
+
+    /* Do nothing unless AFS is available. */
+    if( ! k_hasafs() ) {
+        putil_debug(kafs, "skipping, AFS apparently not available");
         pamret = PAM_IGNORE;
         goto done;
     }
@@ -333,50 +197,15 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
         goto done;
     }
 
-    /* was afslog already called? */
-    already_afslog = 0;
-    if( pam_get_data(pamh, PAMAFS_MODULE_NAME, &dummy) == PAM_SUCCESS ){
-        already_afslog = 1;
-    }
-
-    if( (already_afslog == 0) || (kafs->conf_shared_pag == 1) ){
-        pamret = PAM_SUCCESS;   /* AFS tokens already destroyed or shared PAG */
-        goto done;
-    }
-
-    /* become target user for subsequent operations */
-    if( __enter_user(kafs) > 0 ){
-        pamret = PAM_SESSION_ERR;
-        goto done;
-    }
-
-    /* destroy all AFS tokens */
-    int err = k_unlog();
-    if( err != 0 ){
-        putil_err(pamh, "unable to unlog");
-        err = 1;
-    }
-
-    /* restore service user */
-    if( __leave_user(kafs) ){
-        pamret = PAM_SESSION_ERR;
-        goto done;
-    }
-
-    /* remove module data */
-    if( err == 0 ){
-        if( pam_set_data(pamh, PAMAFS_MODULE_NAME, NULL, NULL) != PAM_SUCCESS ){
-            putil_err(pamh, "unable to remove module data");
-            pamret = PAM_SESSION_ERR;
-            goto done;
-        }
-    }
-
+    /* unlog tokens */
     pamret = PAM_SUCCESS;
+    if( pamkafs_destroy(kafs) != 0 ){
+        pamret = PAM_SESSION_ERR;
+    }
 
 done:
+    putil_debug(kafs, "<<< pam_sm_close_session");
     __free_user(kafs);
-    putil_debug(pamh, "<<< pam_sm_close_session");
     return pamret;
 }
 
