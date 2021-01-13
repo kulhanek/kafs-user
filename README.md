@@ -53,7 +53,6 @@ This is a PAM module, which provides auth and session management tasks. The conf
 in the local.c file. By default, minium_uid is 1000 and support for shared PAGs is enabled. Defaults AFS cells
 are taken from the TheseCells and ThisCell files.
 
-```
 
 ## Related work ##
 * [Heimdal](https://github.com/heimdal/heimdal)
