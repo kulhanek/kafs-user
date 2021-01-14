@@ -35,6 +35,7 @@ struct pma_kafs_handle {
     pam_handle_t*   pamh;
     krb5_context    ctx;
 
+    char*           pw_name;
     uid_t           old_uid,old_euid,uid;
     gid_t           old_gid,gid;
 
@@ -45,6 +46,7 @@ struct pma_kafs_handle {
     int     conf_minimum_uid;
     int     conf_shared_pag;
     char*   conf_locpag_for_pam;
+    char*   conf_locpag_for_user;
     char*   conf_locpag_for_principal;
 };
 
@@ -82,8 +84,10 @@ void __free_user(kafs_handle_t* kafs);
 /* create PAG and tokens */
 int pamkafs_create(kafs_handle_t* kafs, int redo);
 
-/* test service principal in ccache */
-int pamkafs_test_locpag_principal(kafs_handle_t* kafs);
+/* test if local PAG shoudl be created instead of shared one
+ * and convert CCNAME if requested
+ */
+int pamkafs_afslog_preprocess(kafs_handle_t* kafs);
 
 /* afslog */
 int pamkafs_afslog(kafs_handle_t* kafs);

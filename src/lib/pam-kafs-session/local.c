@@ -25,6 +25,7 @@
 #include <syslog.h>
 #include <fnmatch.h>
 #include <security/pam_ext.h>
+#include <security/pam_modutil.h>
 
 #include "internal.h"
 #include <kafs-user.h>
@@ -49,6 +50,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->conf_minimum_uid              = 1000;
     kafs->conf_shared_pag               = 0;
     kafs->conf_locpag_for_pam           = NULL;
+    kafs->conf_locpag_for_user          = NULL;
     kafs->conf_locpag_for_principal     = NULL;
 
     /* read setup from krb5.conf */
@@ -73,6 +75,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->conf_minimum_uid = atol(p_cs);
 
     krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_pam", NULL, &(kafs->conf_locpag_for_pam));
+    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_user", NULL, &(kafs->conf_locpag_for_user));
     krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_principal", NULL, &(kafs->conf_locpag_for_principal));
 
     if (getuid() != geteuid() || getgid() != getegid()) {
@@ -88,51 +91,41 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
         putil_err(kafs, "no username provided");
         goto err;
     }
-    struct passwd* pw = getpwnam(username);
+    struct passwd* pw = pam_modutil_getpwnam(kafs->pamh,username);
     if (!pw) {
         putil_err(kafs, "unable to look up user: '%s'",username);
         goto err;
     }
 
+    kafs->pw_name   = pw->pw_name;
     kafs->uid       = pw->pw_uid;
     kafs->old_uid   = getuid();
     kafs->old_euid  = geteuid();
     kafs->gid       = pw->pw_gid;
     kafs->old_gid   = getgid();
 
-/* list environment variables
-//    char** p_s = environ;
-//    char** p_i = p_s;
-//    while( *p_i ){
-//        putil_err(kafs,"ENV: %s",*p_i);
-//        p_i++;
-//    }
-
-//    p_s = pam_getenvlist(pamh);
-//    if( p_s ){
-//        char** p_i = p_s;
-//        while( *p_i ){
-//            putil_err(kafs,"PAM: %s",*p_i);
-//            p_i++;
-//        }
-//        free(p_s);
-//    }
-*/
-
-    /* check PAM service name if configured */
-    if( (kafs->conf_locpag_for_pam != NULL) && (kafs->conf_shared_pag == 1) ){
-        putil_debug(kafs,"> filter by PAM service: %s",kafs->conf_locpag_for_pam);
-
-        const void* p_service;
-        int ret = pam_get_item(kafs->pamh, PAM_SERVICE, &p_service);
-        if( ret != PAM_SUCCESS ){
-            putil_err(kafs, "no PAM service name");
-            goto err;
+    if( kafs->conf_verbosity == 2 ){
+        /* some internal information */
+        char** p_s = environ;
+        char** p_i = p_s;
+        while( *p_i ){
+            putil_debug(kafs,"> SYSENV: %s",*p_i);
+            p_i++;
         }
-        if( fnmatch(kafs->conf_locpag_for_pam,p_service,FNM_EXTMATCH) == 0 ){
-            putil_notice(kafs, "local PAG only for PAM service '%s' as requested",(char*)p_service);
-            kafs->conf_shared_pag = 0;
+
+        p_s = pam_getenvlist(pamh);
+        if( p_s ){
+            char** p_i = p_s;
+            while( *p_i ){
+                putil_debug(kafs,"> PAMENV: %s",*p_i);
+                p_i++;
+            }
+            free(p_s);
         }
+
+        const void* p_tty;
+        ret = pam_get_item(kafs->pamh, PAM_TTY, &p_tty);
+        putil_debug(kafs,"> TTY: %s",(char*)p_tty);
     }
 
     return(kafs);
@@ -158,7 +151,7 @@ int __ignore_user(kafs_handle_t* kafs)
 {
     if ((kafs->uid == 0) || (kafs->uid < kafs->conf_minimum_uid)) {
         putil_debug(kafs, "ignoring low-UID user (%u < %d)",kafs->uid, kafs->conf_minimum_uid);
-        return(2);
+        return(1);
     }
 
     return(0);
@@ -330,10 +323,9 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
 
     int err = 0;
 
-    if( (kafs->conf_locpag_for_principal != NULL) && (kafs->conf_shared_pag == 1) ){
-        if( pamkafs_test_locpag_principal(kafs) != 0 ){
-            err = 1;
-        }
+    /* do some tests within context of target user */
+    if( pamkafs_afslog_preprocess(kafs) != 0 ){
+        err = 1;
     }
 
     if( (kafs->conf_create_pag == 1) && (err == 0) ) {
@@ -387,75 +379,103 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
 
 /* ============================================================================= */
 
-int pamkafs_test_locpag_principal(kafs_handle_t* kafs)
+int pamkafs_afslog_preprocess(kafs_handle_t* kafs)
 {
     const void*     dummy;
 
     if( pam_get_data(kafs->pamh, PAMAFS_MODULE_NAME LOCPAG, &dummy) == PAM_SUCCESS ){
         /* disable shared PAG due to matching principal */
         kafs->conf_shared_pag = 0;
+    }
+
+    if( pam_get_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, &dummy) == PAM_SUCCESS ){
+        /* already run */
         return(0);
     }
 
-    /* we need K5 ticket cache. */
-    const char* p_cc_name = pam_getenv(kafs->pamh, "KRB5CCNAME");
-    if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
-    if( p_cc_name == NULL ) {
-        putil_err(kafs,"no KRB5CCNAME");
-        return(1);
+    int use_local_pag = 0;
+
+/* check by PAM service name if configured */
+    if( (kafs->conf_locpag_for_pam != NULL) && (kafs->conf_shared_pag == 1) ){
+        putil_debug(kafs,"> filter by PAM service: %s",kafs->conf_locpag_for_pam);
+
+        const void* p_service;
+        int ret = pam_get_item(kafs->pamh, PAM_SERVICE, &p_service);
+        if( ret != PAM_SUCCESS ){
+            putil_err(kafs, "no PAM service name");
+            return(1);
+        }
+        if( fnmatch(kafs->conf_locpag_for_pam,p_service,FNM_EXTMATCH) == 0 ){
+            putil_notice(kafs, "local PAG only for PAM service '%s' as requested",(char*)p_service);
+            use_local_pag = 1;
+        }
     }
 
-    putil_debug(kafs,"> filter by principal: %s",kafs->conf_locpag_for_principal);
+/* check by target user name if configured */
+    if( (kafs->conf_locpag_for_user != NULL) && (kafs->conf_shared_pag == 1) ){
+        putil_debug(kafs,"> filter by target user name: %s",kafs->conf_locpag_for_user);
 
-    /* init krb5 ccache */
-    krb5_error_code kret;
-    krb5_ccache     ccache;
-    krb5_cc_cursor  curs;
-    krb5_creds      creds;
-
-    kret = krb5_cc_resolve(kafs->ctx, p_cc_name, &ccache);
-    if( kret != 0 ) {
-        putil_err_krb5(kafs,kret,"unable to resolve ccache");
-        return(2);
+        if( kafs->pw_name != NULL ){
+            putil_debug(kafs, "> target user name '%s'",kafs->pw_name);
+            if( fnmatch(kafs->conf_locpag_for_user,kafs->pw_name,FNM_EXTMATCH) == 0 ){
+                putil_notice(kafs, "local PAG only for target user name '%s' as requested",(char*)kafs->pw_name);
+                use_local_pag = 1;
+            }
+        }
     }
 
-    kret = krb5_cc_start_seq_get(kafs->ctx, ccache, &curs);
-    if( kret != 0 ) {
-        putil_err_krb5(kafs,kret,"unable to start listing ccache");
-        krb5_cc_close(kafs->ctx, ccache);
-        return(3);
-    }
+/* check by ccache principal name if configured */
+    if( (kafs->conf_locpag_for_principal != NULL) && (kafs->conf_shared_pag == 1) ){
+        putil_debug(kafs,"> filter by principal: %s",kafs->conf_locpag_for_principal);
+
+        /* we need K5 ticket cache. */
+        const char* p_cc_name = pam_getenv(kafs->pamh, "KRB5CCNAME");
+        if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
+        if( p_cc_name != NULL ) {
+            krb5_error_code kret;
+            krb5_ccache     ccache;
+            krb5_principal  princ;
+
+            kret = krb5_cc_resolve(kafs->ctx, p_cc_name, &ccache);
+            if( kret != 0 ) {
+                putil_err_krb5(kafs,kret,"unable to resolve ccache");
+                return(2);
+            }
+
+            kret = krb5_cc_get_principal(kafs->ctx,ccache,&princ);
+            if( kret != 0 ) {
+                putil_err_krb5(kafs,kret,"unable to get default principal");
+                return(3);
+            }
+
+            char* p_sname;
+            if( krb5_unparse_name(kafs->ctx, princ, &p_sname) != 0 ){
+                putil_err_krb5(kafs,kret,"unable to get principal name");
+                return(4);
+            }
+
+            putil_debug(kafs, "> default ccache principal '%s'",p_sname);
+            if( fnmatch(kafs->conf_locpag_for_principal,p_sname,FNM_EXTMATCH) == 0 ){
+                putil_notice(kafs, "local PAG only for default ccache principal '%s' as requested",p_sname);
+                use_local_pag = 1;
+            }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-
-    int found = 0;
-
-    while( (krb5_cc_next_cred(kafs->ctx, ccache, &curs, &creds) == 0) && (found == 0) ){
-        char* p_sname;
-        if( krb5_unparse_name(kafs->ctx, creds.server, &p_sname) != 0 ){
-            putil_err_krb5(kafs,kret,"unable to get principal name");
-        } else {
-            putil_notice(kafs, "> service principal '%s'",p_sname);
-            if( fnmatch(kafs->conf_locpag_for_principal,p_sname,FNM_EXTMATCH) == 0 ){
-                putil_notice(kafs, "local PAG only for service principal '%s' as requested",p_sname);
-                kafs->conf_shared_pag = 0;
-                found = 1;
-            }
             krb5_free_unparsed_name(kafs->ctx,p_sname);
-        }
-        krb5_free_cred_contents(kafs->ctx, &creds);
-    }
-
 #pragma GCC diagnostic pop
 
-    krb5_cc_end_seq_get(kafs->ctx, ccache, &curs);
-    krb5_cc_close(kafs->ctx, ccache);
+            krb5_free_principal(kafs->ctx,princ);
+            krb5_cc_close(kafs->ctx, ccache);
+        }
 
-    if( found == 1 ){
+    }
+
+    if( use_local_pag == 1 ){
+        kafs->conf_shared_pag = 0;
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME LOCPAG, (char *) "yes", NULL) != PAM_SUCCESS ){
             putil_err(kafs, "cannot set success data - locpag");
-            return(4);
+            return(5);
         }
     }
 

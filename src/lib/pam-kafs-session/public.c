@@ -52,7 +52,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     }
 
     /* shell we ignore user? */
-    if( __ignore_user(kafs) == 1 ){
+    if( __ignore_user(kafs) != 0 ){
         pamret = PAM_SUCCESS;
         goto done;
     }
@@ -126,7 +126,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
     }
 
     /* shell we ignore user? */
-    if( __ignore_user(kafs) == 1 ){
+    if( __ignore_user(kafs) != 0 ){
         pamret = PAM_SUCCESS;
         goto done;
     }
@@ -192,7 +192,7 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
     }
 
     /* shell we ignore user? */
-    if( __ignore_user(kafs) == 1 ){
+    if( __ignore_user(kafs) != 0 ){
         pamret = PAM_SUCCESS;
         goto done;
     }

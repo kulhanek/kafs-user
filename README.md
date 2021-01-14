@@ -55,8 +55,16 @@ This is a PAM module, which creates AFS tokens when logged to a system for users
 Default AFS cells are taken from TheseCells and ThisCell files.
 
 The configuration options are as follows:
+* verbosity - verbosity level, 0 - only errors, 1 - notifications, 2 - debugging information (default: 0)
+* create_pag - create local/shared PAGs or keep default session keyring possibly created by pam_kyeinit (default: yes)
+* create_tokens - create AFS tokens (default: yes)
 * minimum_uid - minimum uid for which AFS tokens should be created (default: 1000)
 * shared_pag - create shared PAG (default: no)
+* locpag_for_pam - use local PAG for given PAM service module (default: NULL)
+* locpag_for_user - use local PAG for given target user name (default: NULL)
+* locpag_for_principal  - use local PAG for ccache default principal (default: NULL)
+
+locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern.
 
 The configuration can be changed using /etc/krb5.conf.
 ```bash
