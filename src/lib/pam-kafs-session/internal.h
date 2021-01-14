@@ -48,6 +48,7 @@ struct pma_kafs_handle {
     char*   conf_locpag_for_pam;
     char*   conf_locpag_for_user;
     char*   conf_locpag_for_principal;
+    int     conf_convert_cc_to_kcm;
 };
 
 typedef struct pma_kafs_handle kafs_handle_t;
@@ -84,9 +85,11 @@ void __free_user(kafs_handle_t* kafs);
 /* create PAG and tokens */
 int pamkafs_create(kafs_handle_t* kafs, int redo);
 
-/* test if local PAG shoudl be created instead of shared one
- */
+/* test if local PAG shoudl be created instead of shared one */
 int pamkafs_tests_for_locpag(kafs_handle_t* kafs);
+
+/* if requested, convert ccache type to KCM */
+int pamkafs_convert_to_kcm(kafs_handle_t* kafs);
 
 /* afslog */
 int pamkafs_afslog(kafs_handle_t* kafs);

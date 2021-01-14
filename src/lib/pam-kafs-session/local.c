@@ -24,6 +24,8 @@
 #include <pwd.h>
 #include <syslog.h>
 #include <fnmatch.h>
+#include <stdio.h>
+#include <linux/limits.h>
 #include <security/pam_ext.h>
 #include <security/pam_modutil.h>
 
@@ -52,6 +54,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->conf_locpag_for_pam           = NULL;
     kafs->conf_locpag_for_user          = NULL;
     kafs->conf_locpag_for_principal     = NULL;
+    kafs->conf_convert_cc_to_kcm        = 0;
 
     /* read setup from krb5.conf */
     krb5_error_code kret;
@@ -78,6 +81,9 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_user", NULL, &(kafs->conf_locpag_for_user));
     krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_principal", NULL, &(kafs->conf_locpag_for_principal));
 
+    krb5_appdefault_boolean(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "convert_cc_to_kcm", 0, &(kafs->conf_convert_cc_to_kcm));
+
+/* check the user context */
     if (getuid() != geteuid() || getgid() != getegid()) {
         putil_err(kafs, "kafs setup in a setuid context ignored");
         goto err;
@@ -351,6 +357,10 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
         }
     }
 
+    if( pamkafs_convert_to_kcm(kafs) != 0 ){
+        err = 3;
+    }
+
     /* recreate tokens as requested */
     if( redo ){
         already_afslog = 0;
@@ -360,7 +370,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
     if( (kafs->conf_create_tokens == 1) && (already_afslog == 0) && (err == 0) ) {
         if( pamkafs_afslog(kafs) != 0 ) {
             putil_err(kafs, "unable to afslog");
-            err = 3;
+            err = 4;
         }else {
             putil_debug(kafs,"AFS tokens created");
         }
@@ -482,6 +492,80 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
             putil_err(kafs, "cannot set success data - locpag");
             return(5);
         }
+    }
+
+    return(0);
+}
+
+/* ============================================================================= */
+
+int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
+{
+    if( kafs->conf_convert_cc_to_kcm == 0 ) return(0);
+
+    putil_debug(kafs,"> converting ccache type to KCM");
+
+    const char* p_cc_name = pam_getenv(kafs->pamh, "KRB5CCNAME");
+    if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
+    if( p_cc_name == NULL ) {
+        putil_debug(kafs,"no KRB5CCNAME");
+        return(0);
+    }
+
+    krb5_error_code kret;
+    krb5_ccache     ccache;
+
+    kret = krb5_cc_resolve(kafs->ctx, p_cc_name, &ccache);
+    if( kret != 0 ) {
+        putil_err_krb5(kafs,kret,"unable to resolve ccache");
+        return(1);
+    }
+
+    const char* p_cctype = krb5_cc_get_type(kafs->ctx,ccache);
+    if( strstr(p_cctype,"KCM") != p_cctype ){
+        putil_notice(kafs,"converting ccache type (%s) to KCM as requested",p_cctype);
+
+        krb5_ccache     ccache2;
+        char            buffer[PATH_MAX];
+
+        snprintf(buffer,sizeof(buffer),"KCM:%d",kafs->uid);
+
+        kret = krb5_cc_resolve(kafs->ctx,buffer,&ccache2);
+        if( kret != 0 ) {
+            putil_err_krb5(kafs,kret,"unable to resolve KCM cache '%s",buffer);
+            krb5_cc_close(kafs->ctx, ccache);
+            return(2);
+        }
+
+        kret = krb5_cc_copy_cache(kafs->ctx, ccache, ccache2);
+        if( kret != 0 ) {
+            putil_err_krb5(kafs,kret,"unable to duplicate ccache");
+            krb5_cc_close(kafs->ctx, ccache);
+            return(3);
+        }
+
+        krb5_cc_close(kafs->ctx, ccache2);
+
+        /* destroy previous ccache */
+        krb5_cc_destroy(kafs->ctx, ccache);
+
+        /* set KRB5CCNAME */
+        if( setenv("KRB5CCNAME",buffer,1) != 0 ){
+            putil_errno(kafs,"unable to setenv with SYS KRB5CCNAME='%s'",buffer);
+            return(4);
+        }
+
+        snprintf(buffer,sizeof(buffer),"KRB5CCNAME=KCM:%d",kafs->uid);
+        if( pam_putenv(kafs->pamh,buffer) != PAM_SUCCESS ){
+            putil_errno(kafs,"unable to setenv with PAM %s",buffer);
+            return(4);
+        }
+
+        putil_debug(kafs,"new ccache: %s",buffer);
+
+    } else {
+        putil_debug(kafs,"ccache type is already KCM");
+        krb5_cc_close(kafs->ctx, ccache);
     }
 
     return(0);
