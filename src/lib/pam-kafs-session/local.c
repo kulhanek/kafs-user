@@ -337,7 +337,7 @@ void putil_debug(kafs_handle_t* kafs,const char* p_fmt,...)
 
 /* ============================================================================= */
 
-int pamkafs_create(kafs_handle_t* kafs,int redo)
+int pamkafs_create(kafs_handle_t* kafs,int redo,int session)
 {
     const void*     dummy;
     int             already_afslog;
@@ -345,6 +345,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
     /* was afslog already called? */
     already_afslog = 0;
     if( pam_get_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, &dummy) == PAM_SUCCESS ){
+        putil_err(kafs, "AFSLOG - already set");
         already_afslog = 1;
     }
 
@@ -383,8 +384,10 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
         }
     }
 
-    if( pamkafs_convert_to_kcm(kafs) != 0 ){
-        err = 3;
+    if( session == 1 ){
+        if( pamkafs_convert_ccache(kafs) != 0 ){
+            err = 3;
+        }
     }
 
     /* recreate tokens as requested */
@@ -409,6 +412,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
 
     /* record success */
     if( (already_afslog == 0) && (err == 0 ) ){
+        putil_err(kafs, "AFSLOG - set success data");
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, (char *) "yes", NULL) != PAM_SUCCESS ){
             putil_err(kafs, "cannot set success data - afslog");
             return(3);
@@ -531,7 +535,7 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
 
 /* ============================================================================= */
 
-int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
+int pamkafs_convert_ccache(kafs_handle_t* kafs)
 {
     if( strlen(kafs->conf_convert_cc_to) == 0 ) return(0);
 

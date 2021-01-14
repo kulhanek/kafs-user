@@ -59,7 +59,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
 
     /* create tokens */
     pamret = PAM_SUCCESS;
-    if( pamkafs_create(kafs, 0) != 0 ){
+    if( pamkafs_create(kafs, 0, 1) != 0 ){
         pamret = PAM_SESSION_ERR;
     }
 
@@ -153,7 +153,7 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
 
     /* create tokens */
     pamret = PAM_SUCCESS;
-    if( pamkafs_create(kafs, flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED) ) != 0 ){
+    if( pamkafs_create(kafs, flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED), 0 ) != 0 ){
         pamret = PAM_CRED_ERR;
     }
 

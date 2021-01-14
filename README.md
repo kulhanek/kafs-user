@@ -78,7 +78,7 @@ The configuration can be changed using /etc/krb5.conf.
 
 [appdefaults]
     pam = {
-        ccache = KEYRING:persistent
+        ccache = FILE:/tmp/krb5cc_%u_XXXXXX
     }
     pam-kafs-session = {
         shared_pag  = true
@@ -141,7 +141,8 @@ Jan 14 21:08:07 2021  Jan 15 07:08:07 2021  krbtgt/META@META
 
 ## Solution ##
 * use krb5-user with KEYRING (default_ccache_name = KEYRING:persistent)
-* pam_krb5 with KEYRING (ccache = KEYRING:persistent)
+* pam_krb5 with KEYRING (ccache = FILE:/tmp/krb5cc_%u_XXXXXX), this is necessary as setpag
+  in pam_kafs_session will destroy session keyring
 * pam_kafs_session with convert_cc_to = KEYRING to overcome openssh hardcoded ccache name
 * both Kerberos tickets and AFS tokens are stored in the same session keyring
 * this session keyring can be shared between multiple logins if shared_pag  = true is set for pam_kafs_session
