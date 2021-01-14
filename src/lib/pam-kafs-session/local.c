@@ -564,7 +564,7 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
 
     const char* p_cctype = krb5_cc_get_type(kafs->ctx,ccache);
     if( strstr(p_cctype,kafs->conf_convert_cc_to) != p_cctype ){
-        putil_notice(kafs,"converting ccache type (%s) to '%s' as requested",p_cctype,kafs->conf_convert_cc_to);
+        putil_notice(kafs,"converting ccache type (%s) to (%s) as requested",p_cctype,kafs->conf_convert_cc_to);
 
         krb5_ccache     ccache2;
         char            buffer1[PATH_MAX];
@@ -584,7 +584,7 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
 
         kret = krb5_cc_resolve(kafs->ctx,buffer1,&ccache2);
         if( kret != 0 ) {
-            putil_err_krb5(kafs,kret,"unable to resolve KCM cache '%s",buffer1);
+            putil_err_krb5(kafs,kret,"unable to resolve ccache '%s",buffer1);
             krb5_cc_close(kafs->ctx, ccache);
             return(2);
         }
@@ -632,7 +632,7 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
         putil_debug(kafs,"new ccache: %s",buffer2);
 
     } else {
-        putil_debug(kafs,"ccache type is already KCM");
+        putil_debug(kafs,"ccache type is already (%s)",kafs->conf_convert_cc_to);
         krb5_cc_close(kafs->ctx, ccache);
     }
 

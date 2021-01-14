@@ -77,6 +77,9 @@ The configuration can be changed using /etc/krb5.conf.
     default_ccache_name = KEYRING:persistent
 
 [appdefaults]
+    pam = {
+        ccache = KEYRING:persistent
+    }
     pam-kafs-session = {
         shared_pag  = true
         convert_cc_to = KEYRING
