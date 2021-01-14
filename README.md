@@ -67,15 +67,19 @@ The configuration options are as follows:
 * locpag_for_user - use local PAG for given target user name (default: NULL)
 * locpag_for_principal  - use local PAG for ccache default principal (default: NULL)
 * create_tokens - create AFS tokens (default: yes)
-* convert_cc_to - convert CCACHE to given type if it differs (default: NULL), supported types are KCM and KEYRING
+* convert_cc_to - convert CCACHE to given type if it is different (default: NULL), supported types are KCM and KEYRING
 
 locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern.
 
 The configuration can be changed using /etc/krb5.conf.
 ```bash
+[libdefaults]
+    default_ccache_name = KEYRING:persistent
+
 [appdefaults]
     pam-kafs-session = {
         shared_pag  = true
+        convert_cc_to = KEYRING
         locpag_for_user = +(admin|manager)
     }
 ```
