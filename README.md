@@ -56,7 +56,7 @@ Default AFS cells are taken from TheseCells and ThisCell files.
 
 The configuration options are as follows:
 * verbosity - verbosity level, 0 - only errors, 1 - notifications, 2 - debugging information (default: 0)
-* create_pag - create local/shared PAGs or keep default session keyring possibly created by pam_kyeinit (default: yes)
+* create_pag - create local/shared PAGs (yes) or keep default session keyring possibly created by pam_keyinit (no) (default: yes)
 * create_tokens - create AFS tokens (default: yes)
 * minimum_uid - minimum uid for which AFS tokens should be created (default: 1000)
 * shared_pag - create shared PAG (default: no)
