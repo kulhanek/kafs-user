@@ -324,7 +324,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
     int err = 0;
 
     /* do some tests within context of target user */
-    if( pamkafs_afslog_preprocess(kafs) != 0 ){
+    if( pamkafs_tests_for_locpag(kafs) != 0 ){
         err = 1;
     }
 
@@ -336,18 +336,22 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
                 if( k_setpag_shared() != 0 ){
                     putil_err(kafs, "unable to create shared PAG");
                     err = 2;
+                } else {
+                    putil_debug(kafs,"shared PAG created");
                 }
             } else {
                 if( k_setpag() != 0 ){
                     putil_err(kafs, "unable to create PAG");
                     err = 2;
+                } else {
+                    putil_debug(kafs,"local PAG created");
                 }
             }
             if( err == 0 ) already_afslog = 0; /* PAG created - we need to afslog */
         }
     }
 
-    /* recreate as requested */
+    /* recreate tokens as requested */
     if( redo ){
         already_afslog = 0;
     }
@@ -357,6 +361,8 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
         if( pamkafs_afslog(kafs) != 0 ) {
             putil_err(kafs, "unable to afslog");
             err = 3;
+        }else {
+            putil_debug(kafs,"AFS tokens created");
         }
     }
 
@@ -379,7 +385,7 @@ int pamkafs_create(kafs_handle_t* kafs,int redo)
 
 /* ============================================================================= */
 
-int pamkafs_afslog_preprocess(kafs_handle_t* kafs)
+int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
 {
     const void*     dummy;
 
@@ -468,7 +474,6 @@ int pamkafs_afslog_preprocess(kafs_handle_t* kafs)
             krb5_free_principal(kafs->ctx,princ);
             krb5_cc_close(kafs->ctx, ccache);
         }
-
     }
 
     if( use_local_pag == 1 ){
@@ -549,6 +554,8 @@ int pamkafs_destroy(kafs_handle_t* kafs)
     if( err != 0 ){
         putil_err(kafs, "unable to unlog");
         err = 1;
+    }else {
+        putil_debug(kafs,"AFS tokens destroyed");
     }
 
     /* restore service user */

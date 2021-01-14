@@ -56,13 +56,13 @@ Default AFS cells are taken from TheseCells and ThisCell files.
 
 The configuration options are as follows:
 * verbosity - verbosity level, 0 - only errors, 1 - notifications, 2 - debugging information (default: 0)
+* minimum_uid - minimum uid for which PAG and AFS tokens should be created (default: 1000)
 * create_pag - create local/shared PAGs (yes) or keep default session keyring possibly created by pam_keyinit (no) (default: yes)
-* create_tokens - create AFS tokens (default: yes)
-* minimum_uid - minimum uid for which AFS tokens should be created (default: 1000)
 * shared_pag - create shared PAG (default: no)
 * locpag_for_pam - use local PAG for given PAM service module (default: NULL)
 * locpag_for_user - use local PAG for given target user name (default: NULL)
 * locpag_for_principal  - use local PAG for ccache default principal (default: NULL)
+* create_tokens - create AFS tokens (default: yes)
 
 locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern.
 

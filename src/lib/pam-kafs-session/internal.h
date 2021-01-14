@@ -85,9 +85,8 @@ void __free_user(kafs_handle_t* kafs);
 int pamkafs_create(kafs_handle_t* kafs, int redo);
 
 /* test if local PAG shoudl be created instead of shared one
- * and convert CCNAME if requested
  */
-int pamkafs_afslog_preprocess(kafs_handle_t* kafs);
+int pamkafs_tests_for_locpag(kafs_handle_t* kafs);
 
 /* afslog */
 int pamkafs_afslog(kafs_handle_t* kafs);
