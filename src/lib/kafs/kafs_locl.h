@@ -109,13 +109,13 @@ krb5_error_code _kafs_set_afs_token_1(krb5_context ctx,
 krb5_error_code _kafs_set_afs_token_2(krb5_context ctx,
                  krb5_ccache id,
                  const char* cell,
-                 krb5_const_realm realm);
+                 const char* realm);
 
 /* get AFS service ticket */
 int _kafs_get_creds(krb5_context ctx,
                    krb5_ccache ccache,
                    const char* cell,
-                   krb5_const_realm realm,
+                   const char* realm,
                    krb5_creds** creds);
 
 /* insert token into session keyring */

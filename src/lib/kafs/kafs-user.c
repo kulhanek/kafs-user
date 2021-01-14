@@ -447,7 +447,7 @@ void kafs_free_vls(char** vls)
 krb5_error_code krb5_afslog(krb5_context context,
                  krb5_ccache id,
                  const char* cell,
-                 krb5_const_realm realm)
+                 const char* realm)
 {
     _kafs_dbg("-> krb5_afslog\n");
 

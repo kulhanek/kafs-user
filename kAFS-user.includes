@@ -4,3 +4,10 @@ src/bin
 src/lib/pam-kafs-session
 etc
 .
+src/bin/kinit.mit
+src/bin/kinit.heimdal
+src/bin/kafs-init
+src/bin/afslog
+src/bin/pagsh
+src/bin/tokens
+src/bin/unlog

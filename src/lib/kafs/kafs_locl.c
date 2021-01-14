@@ -136,7 +136,7 @@ krb5_error_code _kafs_set_afs_token_1(krb5_context ctx,
 {
     _kafs_dbg("-> _kafs_set_afs_token_1\n");
 
-    krb5_realm*     realms;
+    char**          realms;
     krb5_error_code kerr;
 
     kerr = krb5_get_host_realm(ctx, cell, &realms);
@@ -162,7 +162,7 @@ krb5_error_code _kafs_set_afs_token_1(krb5_context ctx,
 krb5_error_code _kafs_set_afs_token_2(krb5_context ctx,
                  krb5_ccache ccache,
                  const char* cell,
-                 krb5_const_realm realm)
+                 const char* realm)
 {
     _kafs_dbg("-> _kafs_set_afs_token_2\n");
 
@@ -191,7 +191,7 @@ krb5_error_code _kafs_set_afs_token_2(krb5_context ctx,
 int _kafs_get_creds(krb5_context ctx,
                    krb5_ccache ccache,
                    const char* cell,
-                   krb5_const_realm realm,
+                   const char* realm,
                    krb5_creds** creds)
 {
     _kafs_dbg("-> _kafs_get_creds\n");

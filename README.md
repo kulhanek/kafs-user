@@ -71,7 +71,7 @@ The configuration can be changed using /etc/krb5.conf.
 [appdefaults]
     pam-kafs-session = {
         shared_pag  = true
-        minimum_uid = 1000
+        locpag_for_user = +(admin|manager)
     }
 ```
 
