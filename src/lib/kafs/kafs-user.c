@@ -451,6 +451,8 @@ krb5_error_code krb5_afslog(krb5_context context,
 {
     _kafs_dbg("-> krb5_afslog\n");
 
+    _kafs_dbg("ccache: %s:%s\n",krb5_cc_get_type(context,id),krb5_cc_get_name(context,id));
+
     krb5_error_code err = -1;
 
     if( (cell != NULL) && (realm != NULL) ){

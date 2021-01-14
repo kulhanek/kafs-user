@@ -37,7 +37,7 @@ struct pma_kafs_handle {
 
     char*           pw_name;
     uid_t           old_uid,old_euid,uid;
-    gid_t           old_gid,gid;
+    gid_t           old_gid,old_egid,gid;
 
     /* local config */
     int     conf_verbosity;
@@ -48,7 +48,7 @@ struct pma_kafs_handle {
     char*   conf_locpag_for_pam;
     char*   conf_locpag_for_user;
     char*   conf_locpag_for_principal;
-    int     conf_convert_cc_to_kcm;
+    char*   conf_convert_cc_to;
 };
 
 typedef struct pma_kafs_handle kafs_handle_t;

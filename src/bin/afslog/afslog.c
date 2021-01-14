@@ -38,41 +38,39 @@
 #include <ctype.h>
 #include <krb5.h>
 #include <kafs-user.h>
-#include <getarg.h>
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
 
 /* ========================================================================== */
-int              help_flag;
-int              version_flag;
-getarg_strings   cells;
-char*            client_string;
-char*            cache_string;
-char*            realm;
-int              unlog_flag;
-int              verbose;
 
-struct getargs args[] = {
-    { "cell",	'c', arg_strings, &cells, "cell to log into", "name" },
-    { "realm",	'k', arg_string, &realm, "realm for afs cell", "name" },
-    { "unlog",	'u', arg_flag, &unlog_flag, "remove all tokens", NULL },
-    { "principal",'P',arg_string,&client_string,"principal to use","name"},
-    { "cache",   0,  arg_string, &cache_string, "ccache to use", "name"},
-    { "verbose",'v', arg_flag, &verbose, NULL, NULL },
-    { "version", 0,  arg_flag, &version_flag, NULL, NULL },
-    { "help",	'h', arg_flag, &help_flag, NULL, NULL },
+int              verbose        = 0;
+char*            cache_name     = NULL;
+char*            realm          = NULL;
+
+struct option longopts[] = {
+   { "cache",   required_argument, NULL,     'c' },
+   { "realm",   required_argument, NULL,     'k' },
+   { 0, 0, 0, 0 }
 };
 
-static int num_args = sizeof(args) / sizeof(args[0]);
-
 /* ========================================================================== */
 
-void usage(int ecode)
+void print_usage(void)
 {
-    arg_printusage(args, num_args, NULL, "[cell1 [cell2] ...]");
-    exit(ecode);
+    printf("\n");
+    printf("Obtain AFS tokens. If no cell names are provided, they are read from ThisCell and TheseCells.\n");
+    printf("\n");
+    printf("Usage: afslog [-vdh] [-r REALM] [cell1 [cell2 ...]]\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("   -h   Print this help.\n");
+    printf("   -v   Print kAFS-user version.\n");
+    printf("   -d   Be more verbose.\n");
+    printf("   -r   Specify AFS server realm.\n");
+    printf("\n");
 }
 
 /* ========================================================================== */
@@ -80,79 +78,70 @@ void usage(int ecode)
 int main(int argc, char **argv)
 {
     krb5_error_code ret = 0;
-    krb5_context    context;
-    krb5_ccache     id     = NULL;
-    int             optidx = 0;
-    int i;
-    int num;
+    krb5_context    ctx;
+    krb5_ccache     ccache = NULL;
+    int             c;
 
-    int             failed = 0;
-
-    if( getarg(args, num_args, argc, argv, &optidx) ) usage(1);
-
-    if( help_flag ) usage(0);
-
-    if( version_flag ) {
-        kafs_print_version(NULL);
-        exit(0);
+    while ((c = getopt_long(argc, argv, "hvdr:c:", longopts, NULL)) != -1) {
+        switch (c) {
+            case 'h':
+                print_usage();
+                return(0);
+            case '?':
+            default:
+                print_usage();
+                return(1);
+            case 'v':
+                kafs_print_version(NULL);
+                return(0);
+            case 'd':
+                kafs_set_verbose(1);
+                verbose = 1;
+                break;
+            case 'c':
+                cache_name = optarg;
+                break;
+            case 'r':
+                realm = optarg;
+                break;
+        }
     }
-
-    if( verbose ) kafs_set_verbose(1);
 
     if( ! k_hasafs() ) errx(1, "AFS does not seem to be present on this machine");
 
-    if( unlog_flag ){
-        k_unlog();
-        exit(0);
+    ret = krb5_init_context(&ctx);
+    if( ret ) errx(1, "Unable to get Krb5 ctx");
+
+    if( ccache == NULL && cache_name ) {
+        ret = krb5_cc_resolve(ctx, cache_name, &ccache);
+        if( ret ) errx(1, "Unable to open specified ccache: %s", cache_name);
     }
 
-    ret = krb5_init_context(&context);
-    if( ret ) errx(1, "Unable to get Krb5 context");
-
-    if( client_string ) {
-        krb5_principal client;
-        ret = krb5_parse_name(context, client_string, &client);
-        if( ret == 0 ) ret = krb5_cc_cache_match(context, client, &id);
-        if( ret ) errx(1, "Unable get ccache from specified principal");
-        krb5_free_principal(context, client);
-    }
-
-    if( id == NULL && cache_string ) {
-        ret = krb5_cc_resolve(context, cache_string, &id);
-        if( ret ) errx(1, "Unable to open specified ccache");
-    }
-
-    if( id == NULL ){
-        ret = krb5_cc_default(context, &id);
+    if( ccache == NULL ){
+        ret = krb5_cc_default(ctx, &ccache);
         if( ret ) errx(1, "Unable to get default ccache");
     }
 
     /* afslog */
 
-    num = 0;
-    for(i = 0; i < cells.num_strings; i++){
-        if( verbose ) warnx("Getting tokens for cell \"%s\"", cells.strings[i]);
-        ret = krb5_afslog(context, id, cells.strings[i], realm);
-        if( ret ) failed++;
-        num++;
-    }
-    free_getarg_strings(&cells);
+    int num = 0;
+    int failed = 0;
 
-    for(i = optidx; i < argc; i++){
-        if( verbose ) warnx("Getting tokens for cell \"%s\"", argv[i]);
-        ret = krb5_afslog(context, id, argv[i], realm);
+    for(; optind < argc; optind++){
+        if( verbose ) warnx("Getting tokens for cell \"%s\"", argv[optind]);
+        ret = krb5_afslog(ctx, ccache, argv[optind], realm);
         if( ret ) failed++;
         num++;
     }
     if( num == 0 ) {
         if( verbose ) warnx("Getting tokens for default cells");
-        ret = krb5_afslog(context, id, argv[i], realm);
+        ret = krb5_afslog(ctx, ccache, NULL, realm);
         if( ret ) failed++;
     }
 
     /* clean-up */
-    krb5_cc_close(context,id);
-    krb5_free_context(context);
+    krb5_cc_close(ctx,ccache);
+    krb5_free_context(ctx);
 
     return failed;
 }

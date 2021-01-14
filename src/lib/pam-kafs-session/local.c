@@ -54,13 +54,18 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->conf_locpag_for_pam           = NULL;
     kafs->conf_locpag_for_user          = NULL;
     kafs->conf_locpag_for_principal     = NULL;
-    kafs->conf_convert_cc_to_kcm        = 0;
+    kafs->conf_convert_cc_to            = NULL;
 
     /* read setup from krb5.conf */
     krb5_error_code kret;
     char*           p_cs;
 
+#ifdef HEIMDAL
     kret = krb5_init_context(&(kafs->ctx));
+#else
+    kret = krb5_init_secure_context(&(kafs->ctx));
+#endif
+
     if( kret != 0 ){
         putil_err(kafs,"unable to init krb5 context");
         goto err;
@@ -77,11 +82,11 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "minimum_uid", "1000", &p_cs);
     kafs->conf_minimum_uid = atol(p_cs);
 
-    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_pam", NULL, &(kafs->conf_locpag_for_pam));
-    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_user", NULL, &(kafs->conf_locpag_for_user));
-    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_principal", NULL, &(kafs->conf_locpag_for_principal));
+    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_pam", "", &(kafs->conf_locpag_for_pam));
+    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_user", "", &(kafs->conf_locpag_for_user));
+    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "locpag_for_principal", "", &(kafs->conf_locpag_for_principal));
 
-    krb5_appdefault_boolean(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "convert_cc_to_kcm", 0, &(kafs->conf_convert_cc_to_kcm));
+    krb5_appdefault_string(kafs->ctx, PAMAFS_MODULE_NAME, NULL, "convert_cc_to", "", &(kafs->conf_convert_cc_to));
 
 /* check the user context */
     if (getuid() != geteuid() || getgid() != getegid()) {
@@ -109,6 +114,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->old_euid  = geteuid();
     kafs->gid       = pw->pw_gid;
     kafs->old_gid   = getgid();
+    kafs->old_egid  = getegid();
 
     if( kafs->conf_verbosity == 2 ){
         /* some internal information */
@@ -197,6 +203,11 @@ int __enter_user(kafs_handle_t* kafs)
         return(3);
     }
 
+    if( (kafs->gid != kafs->old_egid) && (setegid(kafs->gid) < 0) ) {
+        putil_errno(kafs, "  unable to change EGID to %u temporarily", kafs->gid);
+        return(4);
+    }
+
     putil_debug(kafs, "  target: uid:%u euid:%u gid:%u",
                 getuid(),geteuid(),getgid());
 
@@ -213,6 +224,12 @@ int __leave_user(kafs_handle_t* kafs)
     /* return to the original UID, EUID and GID (probably root) */
 
     int err = 0;
+
+    if( (kafs->gid != kafs->old_egid) && (setegid(kafs->old_egid) < 0) ) {
+        putil_errno(kafs, "  unable to change EGID back to %u temporarily", kafs->old_egid);
+        err = 1;
+    }
+
     if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->old_euid) < 0) ) {
         putil_errno(kafs,"  unable to change EUID back to %d\n", kafs->old_euid);
         err = 1;
@@ -412,7 +429,9 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
     int use_local_pag = 0;
 
 /* check by PAM service name if configured */
-    if( (kafs->conf_locpag_for_pam != NULL) && (kafs->conf_shared_pag == 1) ){
+    if( (kafs->conf_locpag_for_pam != NULL) &&
+        (strlen(kafs->conf_locpag_for_pam) != 0) &&
+        (kafs->conf_shared_pag == 1) ){
         putil_debug(kafs,"> filter by PAM service: %s",kafs->conf_locpag_for_pam);
 
         const void* p_service;
@@ -428,7 +447,9 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
     }
 
 /* check by target user name if configured */
-    if( (kafs->conf_locpag_for_user != NULL) && (kafs->conf_shared_pag == 1) ){
+    if( (kafs->conf_locpag_for_user != NULL) &&
+        (strlen(kafs->conf_locpag_for_user) != 0) &&
+        (kafs->conf_shared_pag == 1) ){
         putil_debug(kafs,"> filter by target user name: %s",kafs->conf_locpag_for_user);
 
         if( kafs->pw_name != NULL ){
@@ -441,7 +462,9 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
     }
 
 /* check by ccache principal name if configured */
-    if( (kafs->conf_locpag_for_principal != NULL) && (kafs->conf_shared_pag == 1) ){
+    if( (kafs->conf_locpag_for_principal != NULL) &&
+        (strlen(kafs->conf_locpag_for_principal) != 0) &&
+        (kafs->conf_shared_pag == 1) ){
         putil_debug(kafs,"> filter by principal: %s",kafs->conf_locpag_for_principal);
 
         /* we need K5 ticket cache. */
@@ -501,9 +524,18 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
 
 int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
 {
-    if( kafs->conf_convert_cc_to_kcm == 0 ) return(0);
+    if( strlen(kafs->conf_convert_cc_to) == 0 ) return(0);
 
-    putil_debug(kafs,"> converting ccache type to KCM");
+    putil_debug(kafs,"> converting ccache type to '%s'",kafs->conf_convert_cc_to);
+
+    int ok = 0;
+    if( strcmp(kafs->conf_convert_cc_to,"KCM") == 0 ) ok = 1;
+    if( strcmp(kafs->conf_convert_cc_to,"KEYRING") == 0 ) ok = 1;
+
+    if( ok == 0 ){
+        putil_err(kafs,"> unsupported ccache type '%s'",kafs->conf_convert_cc_to);
+        return(0); /* silent error */
+    }
 
     const char* p_cc_name = pam_getenv(kafs->pamh, "KRB5CCNAME");
     if( p_cc_name == NULL ) p_cc_name = getenv("KRB5CCNAME");
@@ -522,22 +554,49 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
     }
 
     const char* p_cctype = krb5_cc_get_type(kafs->ctx,ccache);
-    if( strstr(p_cctype,"KCM") != p_cctype ){
-        putil_notice(kafs,"converting ccache type (%s) to KCM as requested",p_cctype);
+    if( strstr(p_cctype,kafs->conf_convert_cc_to) != p_cctype ){
+        putil_notice(kafs,"converting ccache type (%s) to '%s' as requested",p_cctype,kafs->conf_convert_cc_to);
 
         krb5_ccache     ccache2;
-        char            buffer[PATH_MAX];
+        char            buffer1[PATH_MAX];
+        char            buffer2[PATH_MAX];
 
-        snprintf(buffer,sizeof(buffer),"KCM:%d",kafs->uid);
+        memset(buffer1,0,sizeof(buffer1));
+        memset(buffer2,0,sizeof(buffer2));
 
-        kret = krb5_cc_resolve(kafs->ctx,buffer,&ccache2);
+        if( strcmp(kafs->conf_convert_cc_to,"KCM") == 0 ) {
+            snprintf(buffer1,sizeof(buffer1),"KCM:%d",kafs->uid);
+            snprintf(buffer2,sizeof(buffer1),"KRB5CCNAME=KCM:%d",kafs->uid);
+        }
+        if( strcmp(kafs->conf_convert_cc_to,"KEYRING") == 0 ){
+            snprintf(buffer1,sizeof(buffer1),"KEYRING:persistent");
+            snprintf(buffer2,sizeof(buffer1),"KRB5CCNAME=KEYRING:persistent");
+        }
+
+        kret = krb5_cc_resolve(kafs->ctx,buffer1,&ccache2);
         if( kret != 0 ) {
-            putil_err_krb5(kafs,kret,"unable to resolve KCM cache '%s",buffer);
+            putil_err_krb5(kafs,kret,"unable to resolve KCM cache '%s",buffer1);
+            krb5_cc_close(kafs->ctx, ccache);
+            return(2);
+        }
+        krb5_principal princ;
+        krb5_principal princ2;
+
+        kret = krb5_cc_get_principal(kafs->ctx,ccache,&princ);
+        if( kret != 0 ){
+            putil_err_krb5(kafs,kret,"unable to get principal from '%s",p_cc_name);
             krb5_cc_close(kafs->ctx, ccache);
             return(2);
         }
 
-        kret = krb5_cc_copy_cache(kafs->ctx, ccache, ccache2);
+        kret = krb5_cc_get_principal(kafs->ctx,ccache2,&princ2);
+        if( kret != 0 ){
+           krb5_cc_initialize(kafs->ctx,ccache2,princ);
+        } else {
+            krb5_free_principal(kafs->ctx,princ2);
+        }
+
+        kret = krb5_cc_copy_creds(kafs->ctx, ccache, ccache2);
         if( kret != 0 ) {
             putil_err_krb5(kafs,kret,"unable to duplicate ccache");
             krb5_cc_close(kafs->ctx, ccache);
@@ -545,23 +604,23 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
         }
 
         krb5_cc_close(kafs->ctx, ccache2);
+        krb5_free_principal(kafs->ctx,princ);
 
         /* destroy previous ccache */
         krb5_cc_destroy(kafs->ctx, ccache);
 
         /* set KRB5CCNAME */
-        if( setenv("KRB5CCNAME",buffer,1) != 0 ){
-            putil_errno(kafs,"unable to setenv with SYS KRB5CCNAME='%s'",buffer);
+        if( setenv("KRB5CCNAME",buffer1,1) != 0 ){
+            putil_errno(kafs,"unable to setenv with SYS KRB5CCNAME='%s'",buffer1);
             return(4);
         }
 
-        snprintf(buffer,sizeof(buffer),"KRB5CCNAME=KCM:%d",kafs->uid);
-        if( pam_putenv(kafs->pamh,buffer) != PAM_SUCCESS ){
-            putil_errno(kafs,"unable to setenv with PAM %s",buffer);
+        if( pam_putenv(kafs->pamh,buffer2) != PAM_SUCCESS ){
+            putil_errno(kafs,"unable to setenv with PAM %s",buffer2);
             return(4);
         }
 
-        putil_debug(kafs,"new ccache: %s",buffer);
+        putil_debug(kafs,"new ccache: %s",buffer2);
 
     } else {
         putil_debug(kafs,"ccache type is already KCM");

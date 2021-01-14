@@ -9,6 +9,8 @@ src/bin/tokens/CMakeLists.txt
 src/bin/tokens/tokens.c
 src/bin/unlog/CMakeLists.txt
 src/bin/unlog/unlog.c
+src/lib/kafs/rxkad_kdf-hml.c
+src/lib/kafs/rxkad_kdf-mit.c
 src/lib/pam-kafs-session/internal.h
 src/lib/pam-kafs-session/local.c
 etc/CMakeLists.txt
@@ -18,7 +20,6 @@ etc/kafs-session
 src/lib/pam-kafs-session/CMakeLists.txt
 src/lib/pam-kafs-session/public.c
 src/bin/CMakeLists.txt
-src/lib/kafs/rxkad_kdf.c
 src/lib/kafs/kafs_locl.c
 src/lib/kafs/kafs_locl.h
 src/lib/kafs/kafs-user.c

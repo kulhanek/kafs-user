@@ -122,8 +122,12 @@ int _kafs_get_creds(krb5_context ctx,
 int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds);
 
 /* derive session key */
+#ifdef HEIMDAL
 int _kafs_derive_des_key(krb5_enctype enctype, void *keydata, size_t keylen,
                          unsigned char output[8]);
+#else
+int _kafs_derive_des_key(krb5_creds *creds, uint8_t *session_key);
+#endif
 
 /* invalidate AFS token for k_unlog() */
 int _kafs_invalidate_key(key_serial_t parent,key_serial_t key, char *desc, int desc_len, void *data);

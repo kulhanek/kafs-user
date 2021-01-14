@@ -38,72 +38,67 @@
 #include <ctype.h>
 #include <krb5.h>
 #include <kafs-user.h>
-#include <getarg.h>
+#include <getopt.h>
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* ========================================================================== */
-int              help_flag;
-int              version_flag;
-getarg_strings   cells;
-int              verbose;
 
-struct getargs args[] = {
-    { "cell",	'c', arg_strings, &cells, "cell to unlog from", "name" },
-    { "verbose",'v', arg_flag, &verbose, NULL, NULL },
-    { "version", 0,  arg_flag, &version_flag, NULL, NULL },
-    { "help",	'h', arg_flag, &help_flag, NULL, NULL },
-};
-
-static int num_args = sizeof(args) / sizeof(args[0]);
+int              verbose        = 0;
 
 /* ========================================================================== */
 
-void usage(int ecode)
+void print_usage(void)
 {
-    arg_printusage(args, num_args, NULL, "[cell1 [cell2] ...]");
-    exit(ecode);
+    printf("\n");
+    printf("Destroy either all AFS tokens or AFS tokens for specified cells.\n");
+    printf("\n");
+    printf("Usage: unlog [-vdh] [cell1 [cell2 ...]]\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("   -h   Print this help.\n");
+    printf("   -v   Print kAFS-user version.\n");
+    printf("   -d   Be more verbose.\n");
+    printf("\n");
 }
 
 /* ========================================================================== */
 
 int main(int argc, char **argv)
-{
-    int optidx = 0;
-    int i;
-    int num;
-    int failed = 0;
-    int ret;
+{  
+    int             c;
 
-    if( getarg(args, num_args, argc, argv, &optidx) ) usage(1);
-
-    if( help_flag ) usage(0);
-
-    if( version_flag ) {
-        kafs_print_version(NULL);
-        exit(0);
+    while ((c = getopt(argc, argv, "hvd")) != -1) {
+        switch (c) {
+            case 'h':
+                print_usage();
+                return(0);
+            case '?':
+            default:
+                print_usage();
+                return(1);
+            case 'v':
+                kafs_print_version(NULL);
+                return(0);
+            case 'd':
+                kafs_set_verbose(1);
+                verbose = 1;
+                break;
+        }
     }
-
-    if( verbose ) kafs_set_verbose(1);
 
     if( ! k_hasafs() ) errx(1, "AFS does not seem to be present on this machine");
 
     /* unlog */
+    int num = 0;
+    int failed = 0;
+    int ret;
 
-    num = 0;
-    for(i = 0; i < cells.num_strings; i++){
-        if( verbose ) warnx("Unlogging from cell \"%s\"", cells.strings[i]);
-        ret = k_unlog_cell(cells.strings[i]);
-        if( ret ) failed++;
-        num++;
-    }
-    free_getarg_strings(&cells);
-
-    for(i = optidx; i < argc; i++){
-        if( verbose ) warnx("Unlogging from cell \"%s\"", argv[i]);
-        ret = k_unlog_cell(argv[i]);
+    for(; optind < argc; optind++){
+        if( verbose ) warnx("Unlogging from cell \"%s\"", argv[optind]);
+        ret = k_unlog_cell(argv[optind]);
         if( ret ) failed++;
         num++;
     }

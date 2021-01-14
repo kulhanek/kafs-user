@@ -8,8 +8,15 @@ SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 SET(KAFS_USER_SRC
     kafs-user.c
     kafs_locl.c
-    rxkad_kdf.c
     )
+
+IF(KRB5_FLAVOUR STREQUAL "HEIMDAL")
+    SET(KAFS_USER_SRC ${KAFS_USER_SRC} rxkad_kdf-hml.c)
+ENDIF()
+
+IF(KRB5_FLAVOUR STREQUAL "MIT")
+    SET(KAFS_USER_SRC ${KAFS_USER_SRC} rxkad_kdf-mit.c)
+ENDIF()
 
 ADD_LIBRARY(${LIBKAFS_NAME} SHARED ${KAFS_USER_SRC})
 

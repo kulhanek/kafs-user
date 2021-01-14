@@ -49,65 +49,75 @@
 
 #include <err.h>
 #include <errno.h>
-#include <getarg.h>
+#include <getopt.h>
 
 /* ========================================================================== */
 
-int help_flag;
-int version_flag;
-int c_flag;
-int c_shared_pag;
-int verbose;
-
-struct getargs getargs[] = {
-    { "shared", 's',  arg_flag, &c_shared_pag, " set or join shared user PAG", NULL },
-    { NULL, 'c', arg_flag, &c_flag, " run command", NULL },
-    { "verbose",'v', arg_flag, &verbose, NULL, NULL },
-    { "version", 0,  arg_flag, &version_flag, NULL, NULL },
-    { "help",	'h', arg_flag, &help_flag, NULL, NULL },
-};
-
-static int num_args = sizeof(getargs) / sizeof(getargs[0]);
+int c_flag          = 0;
+int c_shared_pag    = 0;
+int verbose         = 0;
 
 /* ========================================================================== */
 
-void usage(int ecode)
+void print_usage(void)
 {
-    arg_printusage(getargs, num_args, NULL, "[command [args...]]");
-    exit(ecode);
+    printf("\n");
+    printf("Start new shell or command in a new PAG (process authentication group).\n");
+    printf("\n");
+    printf("Usage: newpag [-vdhcs]\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("   -h   Print this help.\n");
+    printf("   -v   Print kAFS-user version.\n");
+    printf("   -d   Be more verbose.\n");
+    printf("   -c   Run command.\n");
+    printf("   -s   Create shared PAG.\n");
+    printf("\n");
 }
-
 /* ========================================================================== */
 
 int main(int argc, char **argv)
 {
-    char*        p;
-    char*        path;
-    char**       args;
-    unsigned int i;
-    int          optidx = 0;
+    int             c;
 
-    if( getarg(getargs, num_args, argc, argv, &optidx) ) usage(1);
-    if(help_flag) usage(0);
-
-    if( version_flag ) {
-        kafs_print_version(NULL);
-        exit(0);
+    while ((c = getopt(argc, argv, "hvdcs")) != -1) {
+        switch (c) {
+            case 'h':
+                print_usage();
+                return(0);
+            case '?':
+            default:
+                print_usage();
+                return(1);
+            case 'v':
+                kafs_print_version(NULL);
+                return(0);
+            case 'd':
+                kafs_set_verbose(1);
+                verbose = 1;
+                break;
+            case 's':
+                c_shared_pag = 1;
+                break;
+            case 'c':
+                c_flag = 1;
+                break;
+        }
     }
 
-    if( verbose ) kafs_set_verbose(1);
+    argc -= optind;
+    argv += optind;
 
-    argc -= optidx;
-    argv += optidx;
-
-    i = 0;
+    int i = 0;
 
     /* FIXME +10 - why? */
-    args = (char **) malloc((argc + 10)*sizeof(char *));
+    char** args = (char **) malloc((argc + 10)*sizeof(char *));
     if (args == NULL)
 	errx (1, "Out of memory allocating %lu bytes",
 	      (unsigned long)((argc + 10)*sizeof(char *)));
 
+    char* path;
+    char* p;
     if( *argv == NULL ) {
         path = getenv("SHELL");
         if( path == NULL ) path = strdup("/bin/sh");

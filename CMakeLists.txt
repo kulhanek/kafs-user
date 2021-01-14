@@ -26,7 +26,6 @@ SET(KAFS_CONF           "/etc/kafs-user")
 SET(LIBKAFS_NAME        "kafs")
 SET(LIBKAFS_SO_VERS     "0")
 SET(LIBKAFS_VERS        "0.5.1")
-SET(LIBKAFS_LIB_PATH    "/usr/lib/x86_64-linux-gnu/kafs-user")
 
 SET(PAM_KAFS_SESSION    "pam_kafs_session")
 
@@ -46,14 +45,34 @@ INSTALL(DIRECTORY
 # dependencies -----------------------------------------------------------------
 # ==============================================================================
 
-# Heimdal Krb5
-INCLUDE_DIRECTORIES(/usr/include/heimdal SYSTEM)
-LINK_DIRECTORIES(/usr/lib/x86_64-linux-gnu/heimdal)
+SET(KRB5_FLAVOUR MIT)
 
-SET(NTLM_LIBS           "-lheimntlm")
-SET(KRB5_LIBS           "-lkrb5 -lhcrypto -lroken")
-SET(KEYUTILS_LIBS       "-lkeyutils")
-SET(PAM_LIBS            "-lpam")
+IF(KRB5_FLAVOUR STREQUAL "HEIMDAL")
+
+    # Heimdal Krb5
+    INCLUDE_DIRECTORIES(/usr/include/heimdal SYSTEM)
+    LINK_DIRECTORIES(/usr/lib/x86_64-linux-gnu/heimdal)
+
+    SET(NTLM_LIBS           "-lheimntlm")
+    SET(KRB5_LIBS           "-lkrb5 -lhcrypto -lroken")
+    SET(KEYUTILS_LIBS       "-lkeyutils")
+    SET(PAM_LIBS            "-lpam")
+
+    SET(LIBKAFS_LIB_PATH    "/lib/x86_64-linux-gnu/kafs-user/heimdal")
+ENDIF()
+
+IF(KRB5_FLAVOUR STREQUAL "MIT")
+
+    # MIT Krb5
+    INCLUDE_DIRECTORIES(/usr/include/mit SYSTEM)
+    LINK_DIRECTORIES(/usr/lib/x86_64-linux-gnu)
+
+    SET(KRB5_LIBS           "-lkrb5")
+    SET(KEYUTILS_LIBS       "-lkeyutils")
+    SET(PAM_LIBS            "-lpam")
+
+    SET(LIBKAFS_LIB_PATH    "/lib/x86_64-linux-gnu/kafs-user/mit")
+ENDIF()
 
 # ------------------------------------------------------------------------------
 

@@ -65,6 +65,7 @@
 #include <linux/limits.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include <kafs-user.h>
 #include <kafs_locl.h>
@@ -145,12 +146,27 @@ krb5_error_code _kafs_set_afs_token_1(krb5_context ctx,
         return(kerr);
     }
 
-    if( realms[0] != NULL ){
-        kerr = _kafs_set_afs_token_2(ctx,id,cell,realms[0]);
-    }  else {
-        _kafs_dbg("not know realm for the host '%s'\n",cell);
-        kerr = -1;
+    char buffer[PATH_MAX];
+    memset(buffer,0,sizeof(buffer));
+
+    char* p_realm;
+
+    if( strlen(realms[0]) != 0 ){
+        p_realm = realms[0];
+        _kafs_dbg("realm: '%s'\n",p_realm);
+    } else {
+        const char* p_s = cell;
+        char* p_t = buffer;
+        while( *p_s ) {
+          *p_t = toupper((unsigned char) *p_s);
+          p_s++;
+          p_t++;
+        }
+        p_realm = buffer;
+        _kafs_dbg("referal realm, using '%s' instead\n",p_realm);
     }
+
+    kerr = _kafs_set_afs_token_2(ctx,id,cell,p_realm);
 
     krb5_free_host_realm(ctx, realms);
 
@@ -229,15 +245,15 @@ int _kafs_get_creds(krb5_context ctx,
 
     kerr = krb5_get_credentials(ctx, 0, ccache, &search_cred, creds);
 
+    if( kerr != 0 ) {
+        _kafs_dbg_krb5(ctx,kerr,"unable to get credentials for afs service principal\n");
+    }
+
     free(princ);
     krb5_free_principal(ctx,search_cred.client);
     krb5_free_principal(ctx,search_cred.server);
 
-    if( kerr != 0 ) {
-        _kafs_dbg_krb5(ctx,kerr,"unable to get credentials for afs service principal\n");
-        return(kerr);
-    }
-    return(0);
+    return(kerr);
 }
 
 /* ============================================================================= */
@@ -268,8 +284,13 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
         return(-1);
     }
 
+#ifdef HEIMDAL
     _kafs_dbg("plen=%zu tklen=%lu rk=%zu\n",
            plen, creds->ticket.length, sizeof(*payload));
+#else
+    _kafs_dbg("plen=%zu tklen=%u rk=%zu\n",
+           plen, creds->ticket.length, sizeof(*payload));
+#endif
 
     /* use version 1 of the key data interface */
     payload->kver           = 1;
@@ -278,10 +299,15 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
     payload->expiry         = creds->times.endtime;
     payload->kvno           = RXKAD_TKT_TYPE_KERBEROS_V5;
 
+#ifdef HEIMDAL
     ret = _kafs_derive_des_key(creds->session.keytype,
                          creds->session.keyvalue.data,
                          creds->session.keyvalue.length,
                          payload->session_key);
+#else
+    ret = _kafs_derive_des_key(creds,payload->session_key);
+#endif
+
     if( ret == -1 ) {
         _kafs_dbg("_kafs_derive_des_key failed\n");
         free(keydesc);
