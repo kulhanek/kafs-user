@@ -145,6 +145,9 @@ Jan 14 21:08:07 2021  Jan 15 07:08:07 2021  krbtgt/META@META
 * pam_kafs_session with convert_cc_to = KEYRING to overcome openssh hardcoded ccache name
 * both Kerberos tickets and AFS tokens are stored in the same session keyring
 * this session keyring can be shared between multiple logins if shared_pag  = true is set for pam_kafs_session
+  * this is suitable for simple renewal of Kerberos tickets and AFS tokens among several sessions at once
+  (local terminals running under user@.service mixed with terminals runnning under ssh or locally
+  directly under GUI session, etc.)
 
 
 ## Related work ##
