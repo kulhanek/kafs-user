@@ -91,8 +91,8 @@ The configuration can be changed using /etc/krb5.conf.
 * linux-generic-hwe-18.04 (5.4.0-58-generic)
 * heimdal-clients does not support ccache type KEYRING
 * heimdal-clients and heimdal-kcm does not work properly
- * problems with KRB5CCNAME
- * KDC time skew
+  * problems with KRB5CCNAME
+  * KDC time skew
 
 ```bash
 [kulhanek@pes ~]$ export KRB5CCNAME=KCM:1001
@@ -121,7 +121,7 @@ Server: krbtgt/META@META
 Client: kulhanek@META
 ```
 * krb5-user and heimdal-kcm seems to work with some minor problems
- * some tickets are not properly overwritten when ccache is copied
+  * some tickets are not properly overwritten when ccache is copied
 ```bash
 [kulhanek@pes ~]$ klist
 Credentials cache: KCM:1001
@@ -136,8 +136,8 @@ Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  krbtgt/META@META
 Jan 14 21:08:07 2021  Jan 15 07:08:07 2021  krbtgt/META@META
 ```
 * openssh does not honor default_ccache_name
- * ccache is hardcoded and resolve to FILE type with random name
- * [reported](https://bugs.launchpad.net/ubuntu/+source/openssh/+bug/1889548)
+  * ccache is hardcoded and resolve to FILE type with random name
+  * [reported](https://bugs.launchpad.net/ubuntu/+source/openssh/+bug/1889548)
 
 ## Solution ##
 * use krb5-user with KEYRING (default_ccache_name = KEYRING:persistent)
