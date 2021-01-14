@@ -2,9 +2,13 @@
 This package provides user space commands for setup and use of kAFS (kernel AFS). 
 
 ## Installation ##
-1) At this moment, the package requires Heimdal version of krb5. First, install the necessary dependencies:
+1) Install the necessary dependencies:
 ```bash
+Heimdal Krb5:
 $ sudo apt-get install heimdal-multidev libpam0g-dev libkeyutils-dev
+
+MIT Krb5:
+$ sudo apt-get install krb5-multidev libpam0g-dev libkeyutils-dev
 ```
 
 2) Download the source code. Update CMakeList.txt if necessary, then compile and install the code.
@@ -63,6 +67,7 @@ The configuration options are as follows:
 * locpag_for_user - use local PAG for given target user name (default: NULL)
 * locpag_for_principal  - use local PAG for ccache default principal (default: NULL)
 * create_tokens - create AFS tokens (default: yes)
+* convert_cc_to - convert CCACHE to given type if it differs (default: NULL), supported types are KCM and KEYRING
 
 locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern.
 
