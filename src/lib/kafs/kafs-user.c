@@ -225,8 +225,11 @@ void kafs_print_version(char* progname)
     printf("(c) 2021 Petr Kulhanek\n");
     printf("This work is derived from:\n");
     printf("  Heimdal: Copyright 1995-2014 Kungliga Tekniska Högskolan\n");
-    printf("  kafs-client:  Copyright (C) 2017 Red Hat, Inc. All Rights Reserved.\n");
-    printf("                Written by David Howells (dhowells@redhat.com)\n");
+    printf("  kafs-client: Copyright (C) 2017 Red Hat, Inc. All Rights Reserved.\n");
+    printf("               Written by David Howells (dhowells@redhat.com)\n");
+    printf("  pam-afs-session: Copyright 2006, 2007, 2008, 2010, 2011\n");
+    printf("                The Board of Trustees of the Leland Stanford Junior University\n");
+    printf("                Written by Russ Allbery <eagle@eyrie.org>\n");
 }
 
 /* ============================================================================= */

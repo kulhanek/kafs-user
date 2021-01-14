@@ -575,11 +575,11 @@ int pamkafs_convert_to_kcm(kafs_handle_t* kafs)
 
         if( strcmp(kafs->conf_convert_cc_to,"KCM") == 0 ) {
             snprintf(buffer1,sizeof(buffer1),"KCM:%d",kafs->uid);
-            snprintf(buffer2,sizeof(buffer1),"KRB5CCNAME=KCM:%d",kafs->uid);
+            snprintf(buffer2,sizeof(buffer2),"KRB5CCNAME=KCM:%d",kafs->uid);
         }
         if( strcmp(kafs->conf_convert_cc_to,"KEYRING") == 0 ){
             snprintf(buffer1,sizeof(buffer1),"KEYRING:persistent");
-            snprintf(buffer2,sizeof(buffer1),"KRB5CCNAME=KEYRING:persistent");
+            snprintf(buffer2,sizeof(buffer2),"KRB5CCNAME=KEYRING:persistent");
         }
 
         kret = krb5_cc_resolve(kafs->ctx,buffer1,&ccache2);

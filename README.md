@@ -87,6 +87,65 @@ The configuration can be changed using /etc/krb5.conf.
     }
 ```
 
+## Some comments - Ubuntu 18.04 LTS ##
+* linux-generic-hwe-18.04 (5.4.0-58-generic)
+* heimdal-clients does not support ccache type KEYRING
+* heimdal-clients and heimdal-kcm does not work properly
+** problems with KRB5CCNAME
+** KDC time skew
+
+```bash
+[kulhanek@pes ~]$ export KRB5CCNAME=KCM:1001
+
+[kulhanek@pes ~]$ kinit
+kulhanek@META's Password:
+[kulhanek@pes ~]$ klist
+klist: krb5_cc_get_principal: No credentials cache file found
+
+[kulhanek@pes ~]$ kinit -c KCM:1001
+kulhanek@META's Password:
+[kulhanek@pes ~]$ klist
+Credentials cache: KCM:1001
+        Principal: kulhanek@META
+
+  Issued                Expires               Principal
+Jan 14 20:56:51 2021  Jan 15 06:56:47 2021  krbtgt/META@META
+
+[kulhanek@pes ~]$ klist -a
+Credentials cache: KCM:1001
+        Principal: kulhanek@META
+    Cache version: 0
+  KDC time offset: 5 years 3 months 3 weeks 5 days 19 hours 22 minutes 40 seconds
+
+Server: krbtgt/META@META
+Client: kulhanek@META
+```
+* krb5-user and heimdal-kcm seems to work with some minor problems
+** some tickets are not properly overwritten when ccache is copied
+```bash
+[kulhanek@pes ~]$ klist
+Credentials cache: KCM:1001
+        Principal: kulhanek@META
+
+  Issued                Expires               Principal
+Jan 14 20:19:50 2021  Jan 15 06:19:49 2021  afs/zcu.cz@ZCU.CZ
+Jan 14 20:19:50 2021  Jan 15 06:19:49 2021  krbtgt/ZCU.CZ@META
+Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  afs/ics.muni.cz@ICS.MUNI.CZ
+Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  krbtgt/ICS.MUNI.CZ@META
+Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  krbtgt/META@META
+Jan 14 21:08:07 2021  Jan 15 07:08:07 2021  krbtgt/META@META
+```
+* openssh does not honor default_ccache_name
+** ccache is hardcoded and resolve to FILE type with random name
+** [reported](https://bugs.launchpad.net/ubuntu/+source/openssh/+bug/1889548)
+
+## Solution ##
+* use krb5-user with KEYRING (default_ccache_name = KEYRING:persistent)
+* pam_krb5 with KEYRING (ccache = KEYRING:persistent)
+* pam_kafs_session with convert_cc_to = KEYRING to overcome openssh hardcoded ccache name
+* both Kerberos tickets and AFS tokens are stored in the same session keyring
+* this session keyring can be shared between multiple logins if shared_pag  = true is set for pam_kafs_session
+
 
 ## Related work ##
 * [Heimdal](https://github.com/heimdal/heimdal)
