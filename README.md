@@ -89,8 +89,8 @@ The configuration can be changed using /etc/krb5.conf.
 
 ## Some comments - Ubuntu 18.04 LTS ##
 * linux-generic-hwe-18.04 (5.4.0-58-generic)
-* heimdal-clients does not support ccache type KEYRING
-* heimdal-clients and heimdal-kcm does not work properly
+* heimdal-clients do not support ccache type KEYRING
+* heimdal-clients and heimdal-kcm do not work properly
   * problems with KRB5CCNAME
   * KDC time skew
 
@@ -120,7 +120,7 @@ Credentials cache: KCM:1001
 Server: krbtgt/META@META
 Client: kulhanek@META
 ```
-* krb5-user and heimdal-kcm seems to work with some minor problems
+* krb5-user and heimdal-kcm seem to work with some minor problems
   * some tickets are not properly overwritten when ccache is copied
 ```bash
 [kulhanek@pes ~]$ klist
