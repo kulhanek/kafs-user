@@ -173,8 +173,8 @@ int __ignore_user(kafs_handle_t* kafs)
 
 int __enter_user(kafs_handle_t* kafs)
 {
-    putil_debug(kafs, "__enter_user: uid:%u euid:%u gid:%u",
-                 getuid(),geteuid(),getgid());
+    putil_debug(kafs, "__enter_user: uid:%u euid:%u gid:%u egid:%d",
+                 getuid(),geteuid(),getgid(),getegid());
 
     /* switch to the real and effective UID and GID so that the keyring ends up owned by the right user */
     if( (kafs->gid != kafs->old_gid) && (setregid(kafs->gid,-1) < 0) ) {
@@ -184,20 +184,20 @@ int __enter_user(kafs_handle_t* kafs)
 
     if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->uid,-1) < 0) ) {
         putil_errno(kafs, "  unable to change UID to %u temporarily", kafs->uid);
-        if (setregid(kafs->old_gid,-1) < 0) {
+        if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid,-1) < 0) ) {
             putil_errno(kafs, "  unable to change GID back to %u", kafs->old_gid);
         }
         return(2);
     }
 
-    /* we need also to change effective UID for shared PAG and krb5 */
+    /* we need also to change effective UID and GID for shared PAG and krb5 */
 
     if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->uid) < 0) ) {
         putil_errno(kafs, "  unable to change EUID to %u temporarily", kafs->uid);
-        if (setreuid(kafs->old_uid,-1) < 0) {
+        if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid,-1) < 0) ){
             putil_errno(kafs, "  unable to change UID back to %u", kafs->old_uid);
         }
-        if (setregid(kafs->old_gid,-1) < 0) {
+        if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid,-1) < 0) ) {
             putil_errno(kafs, "  unable to change GID back to %u", kafs->old_gid);
         }
         return(3);
@@ -205,11 +205,20 @@ int __enter_user(kafs_handle_t* kafs)
 
     if( (kafs->gid != kafs->old_egid) && (setegid(kafs->gid) < 0) ) {
         putil_errno(kafs, "  unable to change EGID to %u temporarily", kafs->gid);
+        if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->old_euid) < 0) ) {
+            putil_errno(kafs, "  unable to change EUID back to %u", kafs->old_euid);
+        }
+        if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid,-1) < 0) ){
+            putil_errno(kafs, "  unable to change UID back to %u", kafs->old_uid);
+        }
+        if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid,-1) < 0) ) {
+            putil_errno(kafs, "  unable to change GID back to %u", kafs->old_gid);
+        }
         return(4);
     }
 
-    putil_debug(kafs, "  target: uid:%u euid:%u gid:%u",
-                getuid(),geteuid(),getgid());
+    putil_debug(kafs, "  target: uid:%u euid:%u gid:%u egid:%u",
+                getuid(),geteuid(),getgid(),getegid());
 
     return(0);
 }
@@ -218,10 +227,10 @@ int __enter_user(kafs_handle_t* kafs)
 
 int __leave_user(kafs_handle_t* kafs)
 {
-    putil_debug(kafs, "__leave_user: uid:%u euid:%u gid:%u",
-                 getuid(),geteuid(),getgid());
+    putil_debug(kafs, "__leave_user: uid:%u euid:%u gid:%u egid:%u",
+                 getuid(),geteuid(),getgid(),getegid());
 
-    /* return to the original UID, EUID and GID (probably root) */
+    /* return to the original UID, EUID and GID, EGID (probably root) */
 
     int err = 0;
 
@@ -232,22 +241,22 @@ int __leave_user(kafs_handle_t* kafs)
 
     if( (kafs->uid != kafs->old_euid) && (seteuid(kafs->old_euid) < 0) ) {
         putil_errno(kafs,"  unable to change EUID back to %d\n", kafs->old_euid);
-        err = 1;
+        err = 2;
     }
 
     /* return to the original UID and GID (probably root) */
     if( (kafs->uid != kafs->old_uid) && (setreuid(kafs->old_uid, -1) < 0) ) {
         putil_errno(kafs,"  unable to change UID back to %d\n", kafs->old_uid);
-        err = 2;
+        err = 3;
     }
 
     if( (kafs->gid != kafs->old_gid) && (setregid(kafs->old_gid, -1) < 0) ) {
         putil_errno(kafs, "  unable to change GID back to %d\n", kafs->old_gid);
-        err = 3;
+        err = 4;
     }
 
-    putil_debug(kafs, "  target: uid:%u euid:%u gid:%u",
-                 getuid(),geteuid(),getgid());
+    putil_debug(kafs, "  target: uid:%u euid:%u gid:%u egid:%u",
+                 getuid(),geteuid(),getgid(),getegid());
     return(err);
 }
 
