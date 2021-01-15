@@ -181,6 +181,7 @@ locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch()
       * it converts Krb5 ccache to requested type (optional)
       * it creates AFS tokens (optional)
   * USER SESSION
+  * the rest is simmilar to sshd
 
 
 * gdm-password (unlock)
