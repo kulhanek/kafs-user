@@ -265,7 +265,7 @@ Server: krbtgt/META@META
 Client: kulhanek@META
 ```
 * krb5-user and heimdal-kcm seem to work with some minor problems
-  * some tickets are not properly overwritten when ccache is copied
+  * some tickets are not properly overwritten when ccache is copied. However, this was caused by wrong implementation.
 ```bash
 [kulhanek@pes ~]$ klist
 Credentials cache: KCM:1001
