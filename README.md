@@ -126,7 +126,7 @@ locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch()
         * move the temporary ccache to target destination, this is done under root
         * KRB5CCNAME is set to FILE:/tmp/krb5cc_UID_RANDOM. The name can be configured by ccache and ccache_dir options.
         * for FILE type, the proper file permissions for the target user are set
-        * however, it would be BAD idea to use KEYRING or KCM ccache types
+        * it is BAD idea to use KEYRING or KCM ccache types
           * KEYRING would be stored into common session keyring owned by root
           * KCM would store ccache for root and not for given user
       * pam_kafs_session - implemented, but it does nothing
@@ -168,7 +168,7 @@ locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch()
       * move the temporary ccache to target destination, this is done under root
       * KRB5CCNAME is set to FILE:/tmp/krb5cc_UID_RANDOM. The name can be configured by ccache and ccache_dir options.
       * for FILE type, the proper file permissions for the target user are set
-      * however, it would be BAD idea to use KEYRING or KCM ccache types
+      * it is BAD idea to use KEYRING or KCM ccache types
         * KEYRING would be stored into common session keyring owned by root
         * KCM would store ccache for root and not for given user
     * pam_kafs_session - implemented, but it does nothing
