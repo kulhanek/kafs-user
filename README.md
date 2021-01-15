@@ -1,7 +1,7 @@
 # kAFS-user #
 This package provides user space commands to setup and use kAFS (kernel AFS) designed and tested for Ubuntu.
 
-At our site, we operates computers, which require support for both Kerberos and AFS. Kerberos is used to mount NFS data storages with job data using the sec=krb5* security flavour, for obtaining tokens for AFS, which stores software modules (possibly restricted to some users), and for job submissions employing PBSPro batch system. PBSPro contains official support for Kerberos ticket and AFS tokens renewals. However, this support is available only for OpenAFS implementation (for example, using libkafs from Heimdal).
+At our site, we operate computers, which require support for both Kerberos and AFS. Kerberos is used to mount NFS data storages with job data using the sec=krb5* security flavour, for obtaining tokens for AFS, which stores software modules (possibly restricted to some users), and for job submissions employing PBSPro batch system. PBSPro contains official support for Kerberos ticket and AFS tokens renewals. However, this support is available only for OpenAFS implementation (for example, using libkafs from Heimdal).
 
 For Krb5+OpenAFS, the typical setup is:
 * openssh with UsePAM and GSSAPIAuthentication to create Krb5 ccache for GSSAPI with delegations
