@@ -121,7 +121,7 @@ locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch()
     * PAM account
       * pam_krb5  - check .k5login?
     * PAM setcred (PAM_ESTABLISH_CRED)
-      * pam_keyinit - while this is implemented in PAM module, it is not called (luckily) under Ubuntu
+      * [pam_keyinit - while this is implemented in PAM module, it is not called (luckily) under Ubuntu]
       * pam_krb5
         * move the temporary ccache to target destination, this is done under root
         * KRB5CCNAME is set to FILE:/tmp/krb5cc_UID_RANDOM. The name can be configured by ccache and ccache_dir options.
@@ -208,7 +208,6 @@ locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch()
     * pam_kafs_session  - implemented, but it does nothing
   * PAM session - open
     * [pam_keyinit - it is not called]
-      * it uses the same session keyring as created by pam_keyinit in PAM session - open above
     * pam_krb5 - it does nothing?
     * pam_kafs_session (run under the target user)
       * it creates PAG (optional)
