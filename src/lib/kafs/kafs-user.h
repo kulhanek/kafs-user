@@ -38,6 +38,8 @@
 #ifndef __KAFS_H
 #define __KAFS_H
 
+#include <keyutils.h>
+
 /* ============================================================================= */
 
 /* is kAFS loaded?
@@ -55,6 +57,10 @@ int k_hasafs(void);
 */
 int k_haspag(void);
 
+/* return ID of current session keyring
+*/
+key_serial_t k_get_pag_id(void);
+
 /* set new anonymous PAG
  * return values:
  *  0 OK
@@ -68,6 +74,14 @@ int k_setpag(void);
  * -1 error with details in errno
 */
 int k_setpag_shared(void);
+
+/* revoke local PAG
+ * return values:
+ *  1 no local PAG
+ *  0 OK
+ * -1 error with details in errno
+*/
+int k_revoke_pag(void);
 
 /* destroy all AFS tokens
  * return values:

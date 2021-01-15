@@ -116,7 +116,7 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
     kafs->old_gid   = getgid();
     kafs->old_egid  = getegid();
 
-    if( kafs->conf_verbosity == 2 ){
+    if( kafs->conf_verbosity == 3 ){
         /* some internal information */
         char** p_s = environ;
         char** p_i = p_s;
@@ -140,6 +140,9 @@ kafs_handle_t* __init_user(pam_handle_t *pamh)
         putil_debug(kafs,"> TTY: %s",(char*)p_tty);
     }
 
+    key_serial_t kt = k_get_pag_id();
+    putil_debug(kafs,"> PAG ID: %10d (0x%08x)",kt,kt);
+
     return(kafs);
 
 err:
@@ -153,6 +156,10 @@ err:
 void __free_user(kafs_handle_t* kafs)
 {
    if( kafs == NULL ) return;
+
+   key_serial_t kt = k_get_pag_id();
+   putil_debug(kafs,"> PAG ID: %10d (0x%08x)",kt,kt);
+
    krb5_free_context(kafs->ctx);
    free(kafs);
 }
@@ -337,7 +344,7 @@ void putil_debug(kafs_handle_t* kafs,const char* p_fmt,...)
 
 /* ============================================================================= */
 
-int pamkafs_create(kafs_handle_t* kafs,int redo,int session)
+int pamkafs_create_session(kafs_handle_t* kafs)
 {
     const void*     dummy;
     int             already_afslog;
@@ -351,75 +358,108 @@ int pamkafs_create(kafs_handle_t* kafs,int redo,int session)
 
     /* become target user for subsequent operations */
     if( __enter_user(kafs) > 0 ){
-        return(1);
+        return(1);   /* this is serious error */
     }
 
     int err = 0;
 
     /* do some tests within context of target user */
-    if( pamkafs_tests_for_locpag(kafs) != 0 ){
-        err = 1;
-    }
+    pamkafs_tests_for_locpag(kafs);  /* ignore errors */
 
-    if( (kafs->conf_create_pag == 1) && (err == 0) ) {
-        /* create PAG if necessary
-         */
+    if( kafs->conf_create_pag == 1 ) {
         if( k_haspag() == 0 ){
             if( kafs->conf_shared_pag == 1 ) {
                 if( k_setpag_shared() != 0 ){
                     putil_err(kafs, "unable to create shared PAG");
                     err = 2;
                 } else {
-                    putil_debug(kafs,"shared PAG created");
+                    putil_debug(kafs,"PAG: shared PAG created");
                 }
             } else {
                 if( k_setpag() != 0 ){
-                    putil_err(kafs, "unable to create PAG");
+                    putil_err(kafs, "unable to create local PAG");
                     err = 2;
                 } else {
-                    putil_debug(kafs,"local PAG created");
+                    putil_debug(kafs,"PAG: local PAG created");
                 }
             }
             if( err == 0 ) already_afslog = 0; /* PAG created - we need to afslog */
+        } else {
+            putil_debug(kafs,"PAG: already exist");
         }
+    } else {
+        putil_debug(kafs,"PAG: reusing default session keyring");
     }
 
-    if( session == 1 ){
-        if( pamkafs_convert_ccache(kafs) != 0 ){
-            err = 3;
-        }
-    }
-
-    /* recreate tokens as requested */
-    if( redo ){
-        already_afslog = 0;
+    /* convert ccache if requested */
+    if( err == 0 ) {
+        /* if the PAG creation fails, we should convert ccache, because it can go to incorrect session keyring */
+        pamkafs_convert_ccache(kafs); /* ignore errors */
+    } else {
+        putil_debug(kafs,"KRB5: no ccache conversion due to previous PAG creation error");
     }
 
     /* afslog */
-    if( (kafs->conf_create_tokens == 1) && (already_afslog == 0) && (err == 0) ) {
-        if( pamkafs_afslog(kafs) != 0 ) {
-            putil_err(kafs, "unable to afslog");
-            err = 4;
-        }else {
-            putil_debug(kafs,"AFS tokens created");
+    if( err == 0 ){
+        /* if the PAG creation fails, we should not create AFS tokens, because they can go to incorrect session keyring */
+        if( (kafs->conf_create_tokens == 1) && (already_afslog == 0)  ) {
+            if( pamkafs_afslog(kafs) != 0 ) {
+                putil_err(kafs, "AFS: unable to afslog");
+                err = 4;
+            }else {
+                putil_debug(kafs,"AFS: tokens created");
+            }
+        } else {
+            putil_debug(kafs,"AFS: no tokens requested");
         }
+    } else {
+        putil_debug(kafs,"AFS: skipped due to previous PAG creation error");
     }
 
     /* restore service user */
     if( __leave_user(kafs) ){
-        return(2);
+        return(2);  /* this is serious error */
     }
 
     /* record success */
     if( (already_afslog == 0) && (err == 0 ) ){
         putil_err(kafs, "AFSLOG - set success data");
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, (char *) "yes", NULL) != PAM_SUCCESS ){
-            putil_err(kafs, "cannot set success data - afslog");
-            return(3);
+            putil_err(kafs, "PAM: unable to set AFSLOG tag");
+            /* always return success */
+        } else {
+            putil_debug(kafs, "PAM: AFSLOG tag set");
         }
     }
 
-    if( err != 0 ) return(4);
+    /* always return success */
+    return(0);
+}
+
+/* ============================================================================= */
+
+int pamkafs_refresh_tokens(kafs_handle_t* kafs)
+{
+    /* always reinitialize AFS tokens */
+
+    /* become target user for subsequent operations */
+    if( __enter_user(kafs) > 0 ){
+        return(1); /* serious error */
+    }
+
+    /* refresh tokens */
+    if( pamkafs_afslog(kafs) != 0 ) {
+        putil_err(kafs, "AFS: unable to refresh AFS tokens");
+    }else {
+        putil_debug(kafs,"AFS: tokens refreshed");
+    }
+
+    /* restore service user */
+    if( __leave_user(kafs) ){
+        return(2);  /* serious error */
+    }
+
+    /* always return success */
     return(0);
 }
 
@@ -525,8 +565,10 @@ int pamkafs_tests_for_locpag(kafs_handle_t* kafs)
     if( use_local_pag == 1 ){
         kafs->conf_shared_pag = 0;
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME LOCPAG, (char *) "yes", NULL) != PAM_SUCCESS ){
-            putil_err(kafs, "cannot set success data - locpag");
+            putil_err(kafs, "PAM: unable to set LOCPAG tag");
             return(5);
+        } else {
+            putil_debug(kafs, "PAM: LOCPAG tag set");
         }
     }
 
@@ -539,14 +581,14 @@ int pamkafs_convert_ccache(kafs_handle_t* kafs)
 {
     if( strlen(kafs->conf_convert_cc_to) == 0 ) return(0);
 
-    putil_debug(kafs,"> converting ccache type to '%s'",kafs->conf_convert_cc_to);
+    putil_debug(kafs,"KRB5: ccache type should be (%s)",kafs->conf_convert_cc_to);
 
     int ok = 0;
     if( strcmp(kafs->conf_convert_cc_to,"KCM") == 0 ) ok = 1;
     if( strcmp(kafs->conf_convert_cc_to,"KEYRING") == 0 ) ok = 1;
 
     if( ok == 0 ){
-        putil_err(kafs,"> unsupported ccache type '%s'",kafs->conf_convert_cc_to);
+        putil_err(kafs,"KRB5: unsupported ccache type (%s) should be KCM or KEYRING",kafs->conf_convert_cc_to);
         return(0); /* silent error */
     }
 
@@ -568,7 +610,7 @@ int pamkafs_convert_ccache(kafs_handle_t* kafs)
 
     const char* p_cctype = krb5_cc_get_type(kafs->ctx,ccache);
     if( strstr(p_cctype,kafs->conf_convert_cc_to) != p_cctype ){
-        putil_notice(kafs,"converting ccache type (%s) to (%s) as requested",p_cctype,kafs->conf_convert_cc_to);
+        putil_notice(kafs,"KRB5: converting ccache type (%s) to (%s) as requested",p_cctype,kafs->conf_convert_cc_to);
 
         krb5_ccache     ccache2;
         char            buffer1[PATH_MAX];
@@ -592,35 +634,13 @@ int pamkafs_convert_ccache(kafs_handle_t* kafs)
             krb5_cc_close(kafs->ctx, ccache);
             return(2);
         }
-        krb5_principal princ;
-        krb5_principal princ2;
 
-        kret = krb5_cc_get_principal(kafs->ctx,ccache,&princ);
-        if( kret != 0 ){
-            putil_err_krb5(kafs,kret,"unable to get principal from '%s",p_cc_name);
-            krb5_cc_close(kafs->ctx, ccache);
-            return(2);
-        }
-
-        kret = krb5_cc_get_principal(kafs->ctx,ccache2,&princ2);
-        if( kret != 0 ){
-           krb5_cc_initialize(kafs->ctx,ccache2,princ);
-        } else {
-            krb5_free_principal(kafs->ctx,princ2);
-        }
-
-        kret = krb5_cc_copy_creds(kafs->ctx, ccache, ccache2);
-        if( kret != 0 ) {
-            putil_err_krb5(kafs,kret,"unable to duplicate ccache");
-            krb5_cc_close(kafs->ctx, ccache);
+        if( pamkafs_copy_cc(kafs,ccache,ccache2) != 0 ){
+            putil_err(kafs,"KRB5: unable to copy ccache from '%s' to '%s'",p_cc_name,buffer1);
             return(3);
         }
 
-        krb5_cc_close(kafs->ctx, ccache2);
-        krb5_free_principal(kafs->ctx,princ);
-
-        /* destroy previous ccache */
-        krb5_cc_destroy(kafs->ctx, ccache);
+        /* FIXME - where should I put updated KRB5CCNAME? */
 
         /* set KRB5CCNAME */
         if( setenv("KRB5CCNAME",buffer1,1) != 0 ){
@@ -633,14 +653,84 @@ int pamkafs_convert_ccache(kafs_handle_t* kafs)
             return(4);
         }
 
-        putil_debug(kafs,"new ccache: %s",buffer2);
+        putil_debug(kafs,"KRB5: new ccache name: '%s'",buffer1);
 
     } else {
-        putil_debug(kafs,"ccache type is already (%s)",kafs->conf_convert_cc_to);
+        putil_debug(kafs,"KRB5: ccache type is already (%s)",kafs->conf_convert_cc_to);
         krb5_cc_close(kafs->ctx, ccache);
     }
 
     return(0);
+}
+
+/* ============================================================================= */
+
+int pamkafs_copy_cc(kafs_handle_t* kafs,krb5_ccache oldcc,krb5_ccache newcc)
+{
+    krb5_cc_cursor  cursor;
+    krb5_error_code kret;
+    krb5_creds      creds;
+
+    kret = krb5_cc_start_seq_get(kafs->ctx, oldcc, &cursor);
+    if( kret != 0 ){
+        putil_err_krb5(kafs, kret, "cannot open credentials from old ccache");
+        goto done;
+    }
+
+    kret = krb5_cc_next_cred(kafs->ctx, oldcc, &cursor, &creds);
+    if( kret != 0 ){
+        putil_err_krb5(kafs, kret, "cannot read credentials from old ccache");
+        goto done;
+    }
+
+    krb5_principal princ;
+    kret = krb5_cc_get_principal(kafs->ctx,oldcc,&princ);
+    if( kret != 0 ){
+        putil_err_krb5(kafs,kret,"unable to get principal from old cache");
+        krb5_free_cred_contents(kafs->ctx, &creds);
+        goto done;
+    }
+
+    kret = krb5_cc_initialize(kafs->ctx, newcc, princ);
+    if( kret != 0 ){
+        putil_err_krb5(kafs, kret, "cannot initialize new ccache");
+        krb5_free_cred_contents(kafs->ctx, &creds);
+        krb5_free_principal(kafs->ctx,princ);
+        goto done;
+    }
+
+    kret = krb5_cc_store_cred(kafs->ctx, newcc, &creds);
+    if( kret != 0 ){
+        putil_err_krb5(kafs, kret, "cannot store credentials in new ccache");
+        krb5_free_cred_contents(kafs->ctx, &creds);
+        krb5_free_principal(kafs->ctx,princ);
+        goto done;
+    }
+
+    krb5_free_cred_contents(kafs->ctx, &creds);
+    krb5_free_principal(kafs->ctx,princ);
+
+    /* copy others if any */
+    while( krb5_cc_next_cred(kafs->ctx, oldcc, &cursor, &creds) == 0 ) {
+        kret = krb5_cc_store_cred(kafs->ctx, newcc, &creds);
+        krb5_free_cred_contents(kafs->ctx, &creds);
+        if( kret != 0 ){
+            putil_err_krb5(kafs, kret, "cannot store credentials in new ccache");
+            krb5_free_cred_contents(kafs->ctx, &creds);
+            goto done;
+        }
+    }
+
+    kret = 0;
+
+done:
+    krb5_cc_end_seq_get(kafs->ctx, oldcc, &cursor);
+    if( kret == 0 ){
+        /* everything is OK - destroy the old cache */
+        krb5_cc_destroy(kafs->ctx, oldcc);
+    }
+
+    return(kret);
 }
 
 /* ============================================================================= */
@@ -680,7 +770,7 @@ int pamkafs_afslog(kafs_handle_t* kafs)
 
 /* ============================================================================= */
 
-int pamkafs_destroy(kafs_handle_t* kafs)
+int pamkafs_destroy_tokens(kafs_handle_t* kafs)
 {
     const void*     dummy;
     int             already_afslog;
@@ -702,32 +792,43 @@ int pamkafs_destroy(kafs_handle_t* kafs)
 
     /* become target user for subsequent operations */
     if( __enter_user(kafs) > 0 ){
-        return(1);
+        return(1); /* serious error */
     }
 
     /* destroy all AFS tokens */
-    int err = k_unlog();
-    if( err != 0 ){
-        putil_err(kafs, "unable to unlog");
-        err = 1;
+    int err = 0;
+    if( k_unlog() == 0 ){
+        putil_debug(kafs,"AFS: tokens destroyed");
     }else {
-        putil_debug(kafs,"AFS tokens destroyed");
+        putil_err(kafs, "AFS: unable to unlog");
+        err = -1;
+    }
+
+    /* revoke local PAG */
+    if( k_revoke_pag() == 0 ){
+        putil_debug(kafs,"PAG: revoked");
+        err = 0;
+    }else {
+        putil_err(kafs, "PAG: unable to revoke local PAG");
+        err = -1;
     }
 
     /* restore service user */
     if( __leave_user(kafs) ){
-        return(2);
+        return(2); /* serious error */
     }
 
     /* remove module data */
     if( err == 0 ){
         if( pam_set_data(kafs->pamh, PAMAFS_MODULE_NAME AFSLOG, NULL, NULL) != PAM_SUCCESS ){
-            putil_err(kafs, "unable to remove module data");
-            return(3);
+            putil_err(kafs, "PAM: unable to remove AFSLOG tag");
+            /* always return success */
+        } else {
+            putil_debug(kafs,"PAM: AFSLOG tag removed");
         }
     }
 
-    if( err != 0 ) return(4);
+    /* always return success */
     return(0);
 }
 

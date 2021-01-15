@@ -105,6 +105,8 @@ int main(int argc, char **argv)
         }
     }
 
+    printf("Current: %d\n",k_haspag());
+
     argc -= optind;
     argv += optind;
 

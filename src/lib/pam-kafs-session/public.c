@@ -28,6 +28,7 @@
  * Open a new session. Create a new PAG with k_setpag or k_setpag_shared.
  * A Kerberos PAM module should have previously run to obtain Kerberos tickets
  * (or ticket forwarding should have already happened).
+ * Always PAM_SUCCESS except of serious errors in pamkafs_session_open
  */
 
 int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *argv[])
@@ -38,7 +39,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     /* init user */
     kafs = __init_user(pamh);
     if( kafs == NULL ) {
-        pamret = PAM_IGNORE;
+        pamret = PAM_SUCCESS;
         goto done;
     }
 
@@ -47,7 +48,7 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
     /* Do nothing unless AFS is available. */
     if( ! k_hasafs() ) {
         putil_debug(kafs, "skipping, AFS apparently not available");
-        pamret = PAM_IGNORE;
+        pamret = PAM_SUCCESS;
         goto done;
     }
 
@@ -57,9 +58,9 @@ int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char *arg
         goto done;
     }
 
-    /* create tokens */
+    /* create PAG, convert ccache, and create AFS tokens */
     pamret = PAM_SUCCESS;
-    if( pamkafs_create(kafs, 0, 1) != 0 ){
+    if( pamkafs_create_session(kafs) != 0 ){
         pamret = PAM_SESSION_ERR;
     }
 
@@ -132,29 +133,24 @@ int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char *argv[])
     }
 
     /*
-     * If DELETE_CRED was specified, delete the tokens (if any).  Similarly
-     * return PAM_SUCCESS here instead of PAM_IGNORE.
+     * If DELETE_CRED was specified, delete the tokens (if any) and eventually revoke local PAG.
      */
     if (flags & PAM_DELETE_CRED) {
-        /* unlog tokens */
         pamret = PAM_SUCCESS;
-        if( pamkafs_destroy(kafs) != 0 ){
+        if( pamkafs_destroy_tokens(kafs) != 0 ){
             pamret = PAM_CRED_ERR;
         }
         goto done;
     }
 
-    /*
-     * We're acquiring tokens.  See if we already have done this and don't do
-     * it again if we have unless we were explicitly told to reinitialize.  If
-     * we're reinitializing, we may be running in a screen saver or the like
-     * and should use the existing PAG, so don't create a new PAG.
-     */
+    /* do not modify PAG here, only reinitialize AFS tokens if explicitly requested (screen unlock) */
 
-    /* create tokens */
+    /* refresh tokens */
     pamret = PAM_SUCCESS;
-    if( pamkafs_create(kafs, flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED), 0 ) != 0 ){
-        pamret = PAM_CRED_ERR;
+    if(  flags & (PAM_REINITIALIZE_CRED | PAM_REFRESH_CRED) ) {
+        if( pamkafs_refresh_tokens(kafs) != 0 ){
+            pamret = PAM_CRED_ERR;
+        }
     }
 
 done:
@@ -166,8 +162,7 @@ done:
 /* ============================================================================= */
 
 /*
- * Close a session.  Normally, what we do here is call unlog, but we can be
- * configured not to do so.
+ * Close a session.  Do nothing here.
  */
 
 int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *argv[])
@@ -178,30 +173,14 @@ int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char *ar
     /* init user */
     kafs = __init_user(pamh);
     if( kafs == NULL ) {
-        pamret = PAM_IGNORE;
+        pamret = PAM_SUCCESS;
         goto done;
     }
 
     putil_debug(kafs, ">>> pam_sm_close_session flags: %x",flags);
 
-    /* Do nothing unless AFS is available. */
-    if( ! k_hasafs() ) {
-        putil_debug(kafs, "skipping, AFS apparently not available");
-        pamret = PAM_IGNORE;
-        goto done;
-    }
-
-    /* shell we ignore user? */
-    if( __ignore_user(kafs) != 0 ){
-        pamret = PAM_SUCCESS;
-        goto done;
-    }
-
-    /* unlog tokens */
+    /* do nothing here */
     pamret = PAM_SUCCESS;
-    if( pamkafs_destroy(kafs) != 0 ){
-        pamret = PAM_SESSION_ERR;
-    }
 
 done:
     putil_debug(kafs, "<<< pam_sm_close_session");

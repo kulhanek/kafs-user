@@ -1,8 +1,41 @@
 # kAFS-user #
-This package provides user space commands for setup and use of kAFS (kernel AFS). 
+This package provides user space commands to setup and use kAFS (kernel AFS) designed and tested for Ubuntu.
+
+At our site, we operates computers, which require support for both Kerberos and AFS. Kerberos is used to mount NFS data storages with job data using the sec=krb5* security flavour, for obtaining tokens for AFS, which stores software modules (possibly restricted to some users), and for job submissions employing PBSPro batch system. PBSPro contains official support for Kerberos ticket and AFS tokens renewals. However, this support is available only for OpenAFS implementation (for example, using libkafs from Heimdal).
+
+For Krb5+OpenAFS, the typical setup is:
+* openssh with UsePAM and GSSAPIAuthentication to create Krb5 ccache for GSSAPI with delegations
+* pam_krb5 PAM module to create Krb5 ccache from password athentication
+* pam_afs_session PAM module to create PAG and AFS tokens
+* PBSPro compiled with Kerberos and AFS setup
+
+This setup has some limitations. Typically, it is very hard to perform synchronized renewal (manual) of Kerberos tickets and AFS tokes inside various sessions (login sessions (konsole terminals), remote sessions, user@*.service sessions (gnome terminals), etc.) Moreover, this setup lacks support of kernel AFS or the support is very limited.
+
+Solutions employing KEYRING or KCM (heimdal-kcm or sssd) types of Kerberos credential cache (ccache) partially solves the problem with Kerberos ccache sharing but it still lacks support for renewal of AFS tokes because the tokens are  stored into independent storages (PAGs).
+
+kAFS-user package aims to provide solution for Kerberos and kernel AFS, which overcomes aforementioned limitations.
+
+
+## AFS Token Manipulation ##
+The package provides commands for manipulation with AFS tokens:
+* afslog.kafs - create AFS tokens if valid TGT ticket is available
+* tokens.kafs - list AFS tokens and their expiration times
+* unlog.kafs - destroy AFS tokens
+* pagsh.kafs - create local or shared PAG and run a command or shell within it
+
+
+## PAG ##
+The PAG (Process Authentication Goup) in the kAFS-user implementation is nothing else than a session keyring. Two types of PAGs are supported:
+* local PAG
+* shared PAG
+
+The local PAG is a session keyring unique for each login session. On contrary, the shared PAG
+is represented by one named session keyring unique for a user, which is then shared among multiple login sessions.
+
+# Installation and Setup of kAFS-user #
 
 ## Installation ##
-1) Install the necessary dependencies:
+1) Install necessary dependencies:
 ```bash
 MIT Krb5:
 $ sudo apt-get install krb5-multidev libpam0g-dev libkeyutils-dev
@@ -20,7 +53,7 @@ $ make
 $ sudo make install
 ```
 
-## Setup AFS ##
+## Setup kAFS ##
 1) Configure CellServDB, TheseCells, and ThisCell files in the /etc/kafs-user/ directory. Their meaning and syntax
 is the same as for OpenAFS. Configuration using AFSDB DNS is not supported.
 
@@ -29,29 +62,10 @@ is the same as for OpenAFS. Configuration using AFSDB DNS is not supported.
 $ sudo systemctl enable afs.mount
 ```
 
-3) Or mount it manually.
+3) Either reboot or mount it manually.
 ```bash
 $ sudo systemctl start afs.mount
 ```
-
-## AFS Token Manipulation ##
-AFS tokens can be manipulated with the following commands:
-
-* kinit.kafs - create new TGT ticket and possibly AFS tokens as well
-* afslog.kafs - create AFS tokens if valid TGT ticket is available
-* tokens.kafs - list AFS tokens and their expiration times
-* unlog.kafs - destroy AFS tokens
-* pagsh.kafs - create local or shared PAG and run a command or shell within it
-
-
-## PAG ##
-The PAG (Process Authentication Goup) in the kAFS-user implementation is nothing else than a session keyring. Two types of PAGs are supported:
-* local PAG
-* shared PAG
-
-The local PAG is a session keyring unique for each login session. On contrary, the shared PAG
-is represented by one named session keyring unique for a user, which is then shared among multiple login sessions.
-
 
 ## pam-kafs-session ##
 This is a PAM module, which creates AFS tokens when logged to a system for users with valid TGT ticket
@@ -69,9 +83,9 @@ The configuration options are as follows:
 * create_tokens - create AFS tokens (default: yes)
 * convert_cc_to - convert CCACHE to given type if it is different (default: NULL), supported types are KCM and KEYRING
 
-locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern.
+locpag_for_pam, locpag_for_user, locpag_for_principal are specified as fnmatch() extended pattern. The configuration can be changed using /etc/krb5.conf in [appdefaults]/pam-kafs-session.
 
-The configuration can be changed using /etc/krb5.conf.
+## Tested configurations ##
 ```bash
 [libdefaults]
     default_ccache_name = KEYRING:persistent
@@ -87,13 +101,143 @@ The configuration can be changed using /etc/krb5.conf.
     }
 ```
 
+# Detailed Analysis #
+
+## Ubuntu 18.04 LTS ##
+
+* sshd
+  * all sshd processes run within the same session keyring under root
+  * GSSAPIAuthentication
+    * if succesfull and GSSAPIDelegateCredentials, the Kerberos ticket is stored into ccache
+    * KRB5CCNAME is set to FILE:/tmp/krb5cc_[uid]_[random]
+    * the ccache name cannot be change as it is hardcoded, see [report](https://bugs.launchpad.net/ubuntu/+source/openssh/+bug/1889548)
+    * anyway, it would be BAD idea to use KEYRING or KCM at this stage without proper handling by OpenSSH
+      * KEYRING would be stored into the shared session keyring owned by root
+      * KCM will create ccache under root, which makes it inaccessible to given user later
+  * PAM stack
+    * PAM auth
+      * pam_krb5
+        * if correct password is provided, the module creates temporary Krb5 ccache of FILE type (under root)
+    * PAM account
+      * pam_krb5  - check .k5login?
+    * PAM setcred (PAM_ESTABLISH_CRED)
+      * pam_keyinit - while this is implemented in PAM module, it is not called (luckily) under Ubuntu
+      * pam_krb5
+        * move the temporary ccache to target destination, this is done under root
+        * KRB5CCNAME is set to FILE:/tmp/krb5cc_UID_RANDOM. The name can be configured by ccache and ccache_dir options.
+        * for FILE type, the proper file permissions for the target user are set
+        * however, it would be BAD idea to use KEYRING or KCM ccache types
+          * KEYRING would be stored into common session keyring owned by root
+          * KCM would store ccache for root and not for given user
+      * pam_kafs_session - implemented, but it does nothing
+    * PAM session - open
+      * pam_keyinit - it initializes a new anonymous session keyring (_ses), it saves its ID
+        * at this point, KEYRING ccache and other keys in the session keyring, if previously created by pam_krb5 or others, will disappear
+      * pam_krb5 - it does nothing?
+      * pam_kafs_session (run under the target user)
+        * it creates PAG (optional)
+        * it converts Krb5 ccache to requested type (optional)
+        * it creates AFS tokens (optional)
+    * sshd forking, the process is reowned to the user at some point
+        * PAM setcred (PAM_ESTABLISH_CRED)
+          * pam_keyinit - it is not called under Ubuntu
+          * pam_krb5 - does nothing
+          * pam_kafs_session - implemented, but it does nothing
+        * USER SESSION
+        * process termination
+    * PAM session - close
+      * pam_keyinit - it revokes the session keyring using saved ID
+      * pam_krb5  - it does nothing?
+      * pam_kafs_session - implemented, but it does nothing
+    * PAM setcred (PAM_DELETE_CRED)
+      * pam_keyinit - it is not called
+      * pam_krb5  - probably destroy ccache?
+      * pam_kafs_session - destroy AFS tokens if not shared PAG, revoke local PAG
+    * process termination
+
+
+* gdm-password (login), PAM stack
+  * PAM auth
+    * pam_krb5
+      * if correct password is provided, the module creates temporary Krb5 ccache of FILE type (under root)
+  * PAM account
+    * pam_krb5  - check .k5login?
+  * PAM setcred (PAM_ESTABLISH_CRED)
+    * [pam_keyinit - while this is implemented in PAM module, it is not called (luckily) under Ubuntu]
+    * pam_krb5
+      * move the temporary ccache to target destination, this is done under root
+      * KRB5CCNAME is set to FILE:/tmp/krb5cc_UID_RANDOM. The name can be configured by ccache and ccache_dir options.
+      * for FILE type, the proper file permissions for the target user are set
+      * however, it would be BAD idea to use KEYRING or KCM ccache types
+        * KEYRING would be stored into common session keyring owned by root
+        * KCM would store ccache for root and not for given user
+    * pam_kafs_session - implemented, but it does nothing
+  * PAM session - open
+    * pam_keyinit - it initializes a new anonymous session keyring (_ses), it saves its ID
+      * at this point, KEYRING ccache and other keys in the session keyring, if previously created by pam_krb5 or others, will disappear
+    * pam_krb5 - it does nothing?
+    * pam_kafs_session (run under the target user)
+      * it creates PAG (optional)
+      * it converts Krb5 ccache to requested type (optional)
+      * it creates AFS tokens (optional)
+  * USER SESSION
+
+
+* gdm-password (unlock)
+  * PAM auth
+    * pam_krb5
+      * if correct password is provided, the module creates temporary Krb5 ccache of FILE type (under root)
+  * PAM account
+    * pam_krb5  - check .k5login?
+  * PAM setcred (PAM_REINITIALIZE_CRED)
+    * [pam_keyinit - it is not called]
+    * pam_krb5 - move the temporary ccache to target destination determined by KRB5CCNAME
+      * the transfer is done under root, problematic for KCM ccache
+    * pam_kafs_session
+      * it renews AFS tokens (optional)
+
+
+* systemd-user, PAM stack
+  * PAM account
+    * pam_krb5  - check .k5login?
+  * PAM setcred (PAM_ESTABLISH_CRED)
+    * [pam_keyinit - it is not called], but the session keyring is probably created in advance by systemd-user
+    * pam_krb5
+      * no PAM_KRB5CCNAME, assuming non-Kerberos login
+    * pam_kafs_session  - implemented, but it does nothing
+  * PAM session - open
+    * [pam_keyinit - it is not called]
+      * it uses the same session keyring as created by pam_keyinit in PAM session - open above
+    * pam_krb5 - it does nothing?
+    * pam_kafs_session (run under the target user)
+      * it creates PAG (optional)
+      * it converts Krb5 ccache to requested type (optional)
+      * it creates AFS tokens (optional)
+      * BUT two last points due to missing KRB5CCNAME will silently fail
+
+
+## Final design of pam_kafs_session ##
+* PAM setcred
+  * PAM_ESTABLISH_CRED - implemented, but it does nothing
+  * PAM_REINITIALIZE_CRED - renew AFS tokes if ccache is available, but do not alter PAG
+  * PAM_REFRESH_CRED - renew AFS tokes if ccache is available, but do not alter PAG
+  * PAM_DELETE_CRED - destroy AFS tokens if not shared PAG, revoke local PAG
+* PAM session - open (all operations are performed under the target user)
+  * it creates PAG (optional)
+  * it converts Krb5 ccache to requested type (optional)
+  * it creates AFS tokens (optional)
+* PAM session - close - implemented, but it does nothing
+* security:
+  * the module does nothing in setuid environment (su, sudo, etc.)
+  * TODO: check safety in multi-threaded environments?
+
+
 ## Some comments - Ubuntu 18.04 LTS ##
 * linux-generic-hwe-18.04 (5.4.0-58-generic)
 * heimdal-clients do not support ccache type KEYRING
 * heimdal-clients and heimdal-kcm do not work properly
   * problems with KRB5CCNAME
   * KDC time skew
-
 ```bash
 [kulhanek@pes ~]$ export KRB5CCNAME=KCM:1001
 
@@ -135,21 +279,6 @@ Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  krbtgt/ICS.MUNI.CZ@META
 Jan 14 20:19:49 2021  Jan 15 06:19:49 2021  krbtgt/META@META
 Jan 14 21:08:07 2021  Jan 15 07:08:07 2021  krbtgt/META@META
 ```
-* openssh does not honor default_ccache_name
-  * ccache is hardcoded and resolve to FILE type with random name
-  * [reported](https://bugs.launchpad.net/ubuntu/+source/openssh/+bug/1889548)
-
-## Solution ##
-* use krb5-user with KEYRING (default_ccache_name = KEYRING:persistent)
-* pam_krb5 with KEYRING (ccache = FILE:/tmp/krb5cc_%u_XXXXXX), this is necessary as setpag
-  in pam_kafs_session will destroy session keyring
-* pam_kafs_session with convert_cc_to = KEYRING to overcome openssh hardcoded ccache name
-* both Kerberos tickets and AFS tokens are stored in the same session keyring
-* this session keyring can be shared between multiple logins if shared_pag  = true is set for pam_kafs_session
-  * this is suitable for simple renewal of Kerberos tickets and AFS tokens among several sessions at once
-  (local terminals running under user@.service mixed with terminals runnning under ssh or locally
-  directly under GUI session, etc.)
-
 
 ## Related work ##
 * [Heimdal](https://github.com/heimdal/heimdal)

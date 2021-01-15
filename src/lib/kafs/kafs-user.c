@@ -148,6 +148,38 @@ int k_haspag(void)
 
 /* ============================================================================= */
 
+key_serial_t k_get_pag_id(void)
+{
+    key_serial_t kt = keyctl_get_keyring_ID(KEY_SPEC_SESSION_KEYRING,0);
+    if( kt == -1 ){
+        _kafs_dbg_errno("unable to get ID of current session keyring");
+    }
+
+    return(kt);
+}
+
+/* ============================================================================= */
+
+int k_revoke_pag(void)
+{
+    if( k_haspag() != 1 ) return(1);
+
+    key_serial_t kt = keyctl_get_keyring_ID(KEY_SPEC_SESSION_KEYRING,0);
+    if( kt == -1 ){
+        _kafs_dbg_errno("unable to get ID of current session keyring");
+        return(-1);
+    }
+
+    long ret = keyctl_revoke(kt);
+    if( ret == -1 ){
+        _kafs_dbg_errno("unable to get ID of current session keyring");
+    }
+
+    return(ret);
+}
+
+/* ============================================================================= */
+
 int k_unlog(void)
 {
     _kafs_dbg("-> k_unlog\n");

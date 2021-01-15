@@ -83,19 +83,25 @@ void __free_user(kafs_handle_t* kafs);
 /* ============================================================================= */
 
 /* create PAG and tokens */
-int pamkafs_create(kafs_handle_t* kafs, int redo, int session);
+int pamkafs_create_session(kafs_handle_t* kafs);
+
+/* refresh AFS tokens */
+int pamkafs_refresh_tokens(kafs_handle_t* kafs);
 
 /* test if local PAG shoudl be created instead of shared one */
 int pamkafs_tests_for_locpag(kafs_handle_t* kafs);
 
-/* if requested, convert ccache type to desired type - only in session */
+/* if requested, convert ccache type to desired type */
 int pamkafs_convert_ccache(kafs_handle_t* kafs);
+
+/* copy ccache */
+int pamkafs_copy_cc(kafs_handle_t* kafs,krb5_ccache oldcc,krb5_ccache newcc);
 
 /* afslog */
 int pamkafs_afslog(kafs_handle_t* kafs);
 
 /* destroy tokens */
-int pamkafs_destroy(kafs_handle_t* kafs);
+int pamkafs_destroy_tokens(kafs_handle_t* kafs);
 
 /* ============================================================================= */
 
