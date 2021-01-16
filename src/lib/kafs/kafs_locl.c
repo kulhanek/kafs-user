@@ -317,10 +317,39 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
 
     memcpy(payload->ticket, creds->ticket.data, creds->ticket.length);
 
+    /* if only add_key is used then the previous key (if any) remains valid until it expires.
+     * This can cause problems with quota reserved for user keys.
+     *
+     * Therefore, the previous key is searched first and then later it is invalidated if existed.
+     */
+
+    key_serial_t old_kt;
+    old_kt = keyctl_search(KEY_SPEC_SESSION_KEYRING,"rxrpc",keydesc,0);
+    if( old_kt < 0 ){
+        _kafs_dbg_errno("AFS token '%s' does not exist yet\n",keydesc);
+    } else {
+        _kafs_dbg("Old AFS token found: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+        /* grant user proper rights, which are required later for key invalidation */
+        if( keyctl_setperm(old_kt,KEY_POS_ALL|KEY_USR_ALL) != 0 ){
+            _kafs_dbg_errno("unable to set permission on old AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+        }
+    }
+
     key_serial_t kt;
     kt = add_key(_KAFS_KEY_SPEC_RXRPC_TYPE, keydesc, payload, plen, KEY_SPEC_SESSION_KEYRING);
     if( kt < 0 ){
         _kafs_dbg_errno("unable to add rxrpc key\n");
+    } else {
+        _kafs_dbg("AFS token created: %10d 0x%08x (%s)\n",kt,kt,keydesc);
+    }
+
+    if( old_kt != -1 ){
+         /* invalidate previous key */
+        if( keyctl_invalidate(old_kt) != 0 ){
+            _kafs_dbg_errno("unable to invalidate previous AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+        } else {
+            _kafs_dbg("Old AFS token invalidated: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+        }
     }
 
     free(keydesc);
