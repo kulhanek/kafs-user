@@ -324,10 +324,8 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
      * With standard righs, the old key becomes practically inaccessible for user but it still
      * occupies kernel until it expires. This can cause problems with quota reserved for user keys.
      *
-     * Therefore, we first search for old key. If found, permissions are extended to the user
-     * so we have enough rights to invalidate the key later.
-     *
-     * The invalidated key should be removed by garbage collector when its reference count reaches zero.
+     * it seems that this is a bug in kAFS, which does not properly handle rxrpc keys,
+     * which should not be used.
      *
      */
 
@@ -344,8 +342,6 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
         }
     }
 
-    /* detect time */
-
     key_serial_t kt;
     kt = add_key(_KAFS_KEY_SPEC_RXRPC_TYPE, keydesc, payload, plen, KEY_SPEC_SESSION_KEYRING);
     if( kt < 0 ){
@@ -361,9 +357,11 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
     }
 
     if( (kt != 0) && (old_kt != -1) ){
-         /* invalidate previous key */
-        if( keyctl_revoke(old_kt) != 0 ){
-            _kafs_dbg_errno("unable to revoke previous AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+        /* shorten expiration time of the previous key to 60 s*/
+        keyctl_set_timeout(old_kt,60);
+        /* and invalidate the key */
+        if( keyctl_invalidate(old_kt) != 0 ){
+            _kafs_dbg_errno("unable to invalidate previous AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
         } else {
             _kafs_dbg("Old AFS token revoked: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
         }

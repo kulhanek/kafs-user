@@ -62,10 +62,6 @@
 
 /* ============================================================================= */
 
-#define MAX_TIME_SKEW 3600
-
-/* ============================================================================= */
-
 struct rxrpc_key_sec2_v1 {
         uint32_t        kver;                   /* key payload interface version */
         uint16_t        security_index;         /* RxRPC header security index */

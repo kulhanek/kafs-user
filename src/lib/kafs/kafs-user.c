@@ -170,7 +170,7 @@ int k_revoke_pag(void)
         return(-1);
     }
 
-    long ret = keyctl_revoke(kt);
+    long ret = keyctl_invalidate(kt);
     if( ret == -1 ){
         _kafs_dbg_errno("unable to get ID of current session keyring");
     }
@@ -215,6 +215,9 @@ int k_unlog_cell(char* cell)
         free(keydesc);
         return(-1);
     }
+
+    /* shorten expiration time of the key to 60 s*/
+    keyctl_set_timeout(kt,60);
 
     ret = keyctl_invalidate(kt);
     if( ret == -1 ){
