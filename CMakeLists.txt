@@ -6,6 +6,14 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 # ==============================================================================
+# conditional setup ------------------------------------------------------------
+# ==============================================================================
+
+SET(ENABLE_UTILS  ON CACHE BOOL "Build and install user utilities (afslog, unlog, ..).")
+SET(ENABLE_USETUP ON CACHE BOOL "Build kafs")
+SET(ENABLE_UPAM   ON CACHE BOOL "Should the static version of hipoly library be built?")
+
+# ==============================================================================
 # project setup ----------------------------------------------------------------
 # ==============================================================================
 
@@ -45,7 +53,7 @@ INSTALL(DIRECTORY
 # dependencies -----------------------------------------------------------------
 # ==============================================================================
 
-SET(KRB5_FLAVOUR MIT)
+SET(KRB5_FLAVOUR "MIT")
 
 IF(KRB5_FLAVOUR STREQUAL "HEIMDAL")
 
@@ -59,6 +67,8 @@ IF(KRB5_FLAVOUR STREQUAL "HEIMDAL")
     SET(PAM_LIBS            "-lpam")
 
     SET(LIBKAFS_LIB_PATH    "/lib/x86_64-linux-gnu/kafs-user/heimdal")
+
+    ADD_DEFINITIONS(-DHEIMDAL)
 ENDIF()
 
 IF(KRB5_FLAVOUR STREQUAL "MIT")
