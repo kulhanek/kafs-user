@@ -321,7 +321,8 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
      * With standard righs, the old key becomes practically inaccessible for user but it still
      * occupies kernel until it expires. This can cause problems with quota reserved for user keys.
      *
-     * Therefore, we first search for old key. If found, permissions are extended to a user.
+     * Therefore, we first search for old key. If found, permissions are extended to the user
+     * so we have enough rights to invalidate the key later.
      * Then, we add a new key. If successfull, the old key is invalidated.
      */
 
@@ -332,7 +333,7 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
     } else {
         _kafs_dbg("Old AFS token found: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
         /* grant user proper rights, which are required later for key invalidation */
-        if( keyctl_setperm(old_kt,KEY_POS_ALL|KEY_USR_ALL) != 0 ){
+        if( keyctl_setperm(old_kt,(KEY_POS_ALL|KEY_USR_ALL) & ~KEY_POS_WRITE) != 0 ){
             _kafs_dbg_errno("unable to set permission on old AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
         }
     }
@@ -340,12 +341,18 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
     key_serial_t kt;
     kt = add_key(_KAFS_KEY_SPEC_RXRPC_TYPE, keydesc, payload, plen, KEY_SPEC_SESSION_KEYRING);
     if( kt < 0 ){
-        _kafs_dbg_errno("unable to add rxrpc key\n");
+        _kafs_dbg_errno("AFS token: unable to add rxrpc key (%s)\n",keydesc);
+        /* revert back rights on old key */
+        if( old_kt != -1 ){
+            if( keyctl_setperm(old_kt,(KEY_POS_ALL & ~KEY_POS_WRITE) | KEY_USR_VIEW) != 0 ){
+                _kafs_dbg_errno("unable to restore permission on old AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+            }
+        }
     } else {
         _kafs_dbg("AFS token created: %10d 0x%08x (%s)\n",kt,kt,keydesc);
     }
 
-    if( old_kt != -1 ){
+    if( (kt != 0) && (old_kt != -1) ){
          /* invalidate previous key */
         if( keyctl_invalidate(old_kt) != 0 ){
             _kafs_dbg_errno("unable to invalidate previous AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
