@@ -383,8 +383,11 @@ int _kafs_invalidate_key(key_serial_t parent,key_serial_t key, char *desc, int d
         return(0);
     }
     if(strstr(desc,_KAFS_KEY_SPEC_RXRPC_TYPE) == desc ){
+        /* shorten expiration time of the key to 60 s*/
+        keyctl_set_timeout(key,60);
+
         _kafs_dbg("invalidating key '%s' in the session keyring\n",desc);
-        long ret = keyctl_revoke(key);
+        long ret = keyctl_invalidate(key);
         if( ret == -1 ){
             _kafs_dbg_errno("unable to invalidate key '%s' in the session keyring\n",desc);
         }
