@@ -317,10 +317,12 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
 
     memcpy(payload->ticket, creds->ticket.data, creds->ticket.length);
 
-    /* if only add_key is used then the previous key (if any) remains valid until it expires.
-     * This can cause problems with quota reserved for user keys.
+    /* add_key will substitute a previous key, which is detached from the current session keyring.
+     * With standard righs, the old key becomes practically inaccessible for user but it still
+     * occupies kernel until it expires. This can cause problems with quota reserved for user keys.
      *
-     * Therefore, the previous key is searched first and then later it is invalidated if existed.
+     * Therefore, we first search for old key. If found, permissions are extended to a user.
+     * Then, we add a new key. If successfull, the old key is invalidated.
      */
 
     key_serial_t old_kt;
