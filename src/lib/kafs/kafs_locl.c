@@ -327,7 +327,8 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
      * Therefore, we first search for old key. If found, permissions are extended to the user
      * so we have enough rights to invalidate the key later.
      *
-     * Well, the invalidation does not work. Testing key revokation.
+     * The invalidated key should be removed by garbage collector when its reference count reaches zero.
+     *
      */
 
     key_serial_t old_kt;
@@ -337,10 +338,13 @@ int _kafs_settoken_rxkad(const char* cell, krb5_creds* creds)
     } else {
         _kafs_dbg("Old AFS token found: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
         /* grant user proper rights, which are required later for key invalidation */
-        if( keyctl_setperm(old_kt,KEY_POS_ALL|KEY_USR_ALL) != 0 ){
+        if( keyctl_setperm(old_kt,(KEY_POS_ALL & ~KEY_POS_WRITE)|(KEY_USR_ALL & ~KEY_USR_WRITE)) != 0 ){
             _kafs_dbg_errno("unable to set permission on old AFS token: %10d 0x%08x (%s)\n",old_kt,old_kt,keydesc);
+            /* ignore this error */
         }
     }
+
+    /* detect time */
 
     key_serial_t kt;
     kt = add_key(_KAFS_KEY_SPEC_RXRPC_TYPE, keydesc, payload, plen, KEY_SPEC_SESSION_KEYRING);
@@ -382,7 +386,7 @@ int _kafs_invalidate_key(key_serial_t parent,key_serial_t key, char *desc, int d
     }
     if(strstr(desc,_KAFS_KEY_SPEC_RXRPC_TYPE) == desc ){
         _kafs_dbg("invalidating key '%s' in the session keyring\n",desc);
-        long ret = keyctl_invalidate(key);
+        long ret = keyctl_revoke(key);
         if( ret == -1 ){
             _kafs_dbg_errno("unable to invalidate key '%s' in the session keyring\n",desc);
         }
